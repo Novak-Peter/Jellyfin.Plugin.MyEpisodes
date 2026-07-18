@@ -1,0 +1,134 @@
+<div id="MyEpisodesConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-select,emby-checkbox">
+    <div data-role="content">
+        <div class="content-primary">
+            <form id="MyEpisodesConfigForm">
+                <div class="selectContainer">
+                    <label for="selectUser">Jellyfin User</label>
+                    <select id="selectUser" name="selectUser" is="emby-select"></select>
+                    <div class="fieldDescription">Select the Jellyfin user to configure. Each user can sync with their own MyEpisodes account.</div>
+                </div>
+
+                <div class="inputContainer">
+                    <label for="txtUsername">MyEpisodes Username</label>
+                    <input type="text" id="txtUsername" name="txtUsername" is="emby-input" required />
+                    <div class="fieldDescription">Your MyEpisodes.com username.</div>
+                </div>
+
+                <div class="inputContainer">
+                    <label for="txtPassword">MyEpisodes Password</label>
+                    <input type="password" id="txtPassword" name="txtPassword" is="emby-input" required />
+                    <div class="fieldDescription">Your MyEpisodes.com password. Credentials are saved securely on the server.</div>
+                </div>
+
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label>
+                        <input type="checkbox" id="chkSyncWatched" name="chkSyncWatched" is="emby-checkbox" />
+                        <span>Sync watched status</span>
+                    </label>
+                    <div class="fieldDescription">Automatically mark episodes as watched/unwatched on MyEpisodes.com when toggled or completed in Jellyfin.</div>
+                </div>
+
+                <button type="submit" class="raised button-submit block emby-button">Save</button>
+            </form>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        (function () {
+            var pluginId = '105f5b60-0777-4223-bf2c-4def48a573ba';
+            var currentConfig = null;
+
+            function loadUserConfig(userId) {
+                if (!currentConfig) return;
+
+                var userConfig = currentConfig.UserConfigurations.find(function (u) {
+                    return u.JellyfinUserId === userId;
+                });
+
+                if (userConfig) {
+                    document.querySelector('#txtUsername').value = userConfig.Username || '';
+                    document.querySelector('#txtPassword').value = userConfig.Password || '';
+                    document.querySelector('#chkSyncWatched').checked = userConfig.SyncWatched !== false;
+                } else {
+                    document.querySelector('#txtUsername').value = '';
+                    document.querySelector('#txtPassword').value = '';
+                    document.querySelector('#chkSyncWatched').checked = true;
+                }
+            }
+
+            document.querySelector('#MyEpisodesConfigPage').addEventListener('pageshow', function () {
+                Dashboard.showLoadingMsg();
+
+                var usersPromise = ApiClient.getUsers();
+                var configPromise = ApiClient.getPluginConfiguration(pluginId);
+
+                Promise.all([usersPromise, configPromise]).then(function (results) {
+                    var users = results[0];
+                    currentConfig = results[1];
+
+                    var selectUser = document.querySelector('#selectUser');
+                    selectUser.innerHTML = users.map(function (user) {
+                        return '<option value="' + user.Id + '">' + user.Name + '</option>';
+                    }).join('');
+
+                    selectUser.addEventListener('change', function () {
+                        loadUserConfig(this.value);
+                    });
+
+                    // Initial load for first user
+                    if (users.length > 0) {
+                        loadUserConfig(users[0].Id);
+                    }
+
+                    Dashboard.hideLoadingMsg();
+                }).catch(function (err) {
+                    Dashboard.hideLoadingMsg();
+                    console.error('MyEpisodes: Error loading configuration:', err);
+                });
+            });
+
+            document.querySelector('#MyEpisodesConfigForm').addEventListener('submit', function (e) {
+                e.preventDefault();
+                Dashboard.showLoadingMsg();
+
+                var selectedUserId = document.querySelector('#selectUser').value;
+                if (!selectedUserId) {
+                    Dashboard.hideLoadingMsg();
+                    return;
+                }
+
+                ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                    currentConfig = config;
+                    if (!currentConfig.UserConfigurations) {
+                        currentConfig.UserConfigurations = [];
+                    }
+
+                    var userConfigIndex = currentConfig.UserConfigurations.findIndex(function (u) {
+                        return u.JellyfinUserId === selectedUserId;
+                    });
+
+                    var userConfig = {
+                        JellyfinUserId: selectedUserId,
+                        Username: document.querySelector('#txtUsername').value,
+                        Password: document.querySelector('#txtPassword').value,
+                        SyncWatched: document.querySelector('#chkSyncWatched').checked
+                    };
+
+                    if (userConfigIndex > -1) {
+                        currentConfig.UserConfigurations[userConfigIndex] = userConfig;
+                    } else {
+                        currentConfig.UserConfigurations.push(userConfig);
+                    }
+
+                    return ApiClient.updatePluginConfiguration(pluginId, currentConfig);
+                }).then(function () {
+                    Dashboard.hideLoadingMsg();
+                    Dashboard.processPluginConfigurationUpdateResult();
+                }).catch(function (err) {
+                    Dashboard.hideLoadingMsg();
+                    console.error('MyEpisodes: Error saving configuration:', err);
+                });
+            });
+        })();
+    </script>
+</div>

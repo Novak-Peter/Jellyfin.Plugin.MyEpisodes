@@ -1,0 +1,27 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Jellyfin.Plugin.MyEpisodes", "Jellyfin.Plugin.MyEpisodes\Jellyfin.Plugin.MyEpisodes.csproj", "{2DABFE4C-58CE-4574-9A4B-ACC2D44892EE}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{112B4BFF-5990-44D3-8C3E-C4960D43168E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Jellyfin.Plugin.MyEpisodes.Tests", "tests\Jellyfin.Plugin.MyEpisodes.Tests\Jellyfin.Plugin.MyEpisodes.Tests.csproj", "{5E4A369F-6BCA-40A7-8DB9-C1F33A14B8BF}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{2DABFE4C-58CE-4574-9A4B-ACC2D44892EE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2DABFE4C-58CE-4574-9A4B-ACC2D44892EE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2DABFE4C-58CE-4574-9A4B-ACC2D44892EE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2DABFE4C-58CE-4574-9A4B-ACC2D44892EE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5E4A369F-6BCA-40A7-8DB9-C1F33A14B8BF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5E4A369F-6BCA-40A7-8DB9-C1F33A14B8BF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5E4A369F-6BCA-40A7-8DB9-C1F33A14B8BF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5E4A369F-6BCA-40A7-8DB9-C1F33A14B8BF}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+		GlobalSection(NestedProjects) = preSolution
+			{5E4A369F-6BCA-40A7-8DB9-C1F33A14B8BF} = {112B4BFF-5990-44D3-8C3E-C4960D43168E}
+		EndGlobalSection
+EndGlobal
