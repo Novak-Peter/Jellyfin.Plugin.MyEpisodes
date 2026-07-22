@@ -137,7 +137,7 @@ namespace Jellyfin.Plugin.MyEpisodes
             }
         }
 
-        public async Task<int?> FindShowIdAsync(string showName)
+        public async Task<int?> FindShowIdAsync(string showName, int? productionYear = null)
         {
             if (string.IsNullOrEmpty(showName))
             {
@@ -158,16 +158,51 @@ namespace Jellyfin.Plugin.MyEpisodes
             // 1. Try local cache
             lock (_shows)
             {
+                // a. Exact match on base name
                 if (_shows.TryGetValue(normalizedName, out var cachedId))
                 {
                     return cachedId;
                 }
 
-                // Try partial matches in local cache (startswith or contains)
+                // b. Exact match on name (year)
+                if (productionYear.HasValue)
+                {
+                    var normalizedWithYear = NormalizeShowName($"{showName} ({productionYear.Value})");
+                    if (_shows.TryGetValue(normalizedWithYear, out var cachedIdWithYear))
+                    {
+                        return cachedIdWithYear;
+                    }
+                }
+
+                // c. Partial match on name + year
+                if (productionYear.HasValue)
+                {
+                    var yearStr = productionYear.Value.ToString();
+                    var yearMatches = _shows
+                        .Where(x => (x.Key.Contains(normalizedName) || normalizedName.Contains(x.Key)) && x.Key.Contains(yearStr))
+                        .ToList();
+                    if (yearMatches.Count == 1)
+                    {
+                        _logger.LogInformation("MyEpisodes: Found partial match with year in local cache for '{ShowName}': '{MatchedName}' (ID: {Id})", showName, yearMatches[0].Key, yearMatches[0].Value);
+                        return yearMatches[0].Value;
+                    }
+                    else if (yearMatches.Count > 1)
+                    {
+                        _logger.LogInformation("MyEpisodes: Multiple partial matches with year in local cache. Picking first: '{MatchedName}' (ID: {Id})", yearMatches[0].Key, yearMatches[0].Value);
+                        return yearMatches[0].Value;
+                    }
+                }
+
+                // d. Partial match on name only
                 var matches = _shows.Where(x => normalizedName.Contains(x.Key) || x.Key.Contains(normalizedName)).ToList();
                 if (matches.Count == 1)
                 {
                     _logger.LogInformation("MyEpisodes: Found partial match in local cache for '{ShowName}': '{MatchedName}' (ID: {Id})", showName, matches[0].Key, matches[0].Value);
+                    return matches[0].Value;
+                }
+                else if (matches.Count > 1)
+                {
+                    _logger.LogInformation("MyEpisodes: Multiple partial matches in local cache. Picking first: '{MatchedName}' (ID: {Id})", matches[0].Key, matches[0].Value);
                     return matches[0].Value;
                 }
             }
@@ -208,18 +243,65 @@ namespace Jellyfin.Plugin.MyEpisodes
                     return null;
                 }
 
-                // Match logic similar to Kodi:
-                // a. Check exact match
-                var exactMatch = searchMatches.FirstOrDefault(x => string.Equals(NormalizeShowName(x.Name), normalizedName, StringComparison.OrdinalIgnoreCase));
-                if (exactMatch.Id != 0)
+                // a. Exact match on base name
+                var exactMatches = searchMatches.Where(x => string.Equals(NormalizeShowName(x.Name), normalizedName, StringComparison.OrdinalIgnoreCase)).ToList();
+                if (exactMatches.Count == 1)
                 {
-                    _logger.LogInformation("MyEpisodes: Found exact match online for '{ShowName}' -> '{MatchedName}' (ID: {Id})", showName, exactMatch.Name, exactMatch.Id);
-                    await AddShowAsync(exactMatch.Id).ConfigureAwait(false);
-                    return exactMatch.Id;
+                    _logger.LogInformation("MyEpisodes: Found exact match online for '{ShowName}' -> '{MatchedName}' (ID: {Id})", showName, exactMatches[0].Name, exactMatches[0].Id);
+                    await AddShowAsync(exactMatches[0].Id).ConfigureAwait(false);
+                    return exactMatches[0].Id;
                 }
 
-                // b. Check starts-with or partial match
-                var partialMatches = searchMatches.Where(x => NormalizeShowName(x.Name).StartsWith(normalizedName) || normalizedName.StartsWith(NormalizeShowName(x.Name))).ToList();
+                // b. Exact match on name (year)
+                if (productionYear.HasValue)
+                {
+                    var normalizedWithYear = NormalizeShowName($"{showName} ({productionYear.Value})");
+                    var exactMatchesWithYear = searchMatches.Where(x => string.Equals(NormalizeShowName(x.Name), normalizedWithYear, StringComparison.OrdinalIgnoreCase)).ToList();
+                    if (exactMatchesWithYear.Count == 1)
+                    {
+                        _logger.LogInformation("MyEpisodes: Found exact match online with year for '{ShowName}' -> '{MatchedName}' (ID: {Id})", showName, exactMatchesWithYear[0].Name, exactMatchesWithYear[0].Id);
+                        await AddShowAsync(exactMatchesWithYear[0].Id).ConfigureAwait(false);
+                        return exactMatchesWithYear[0].Id;
+                    }
+                }
+
+                // c. Partial match on name + year
+                if (productionYear.HasValue)
+                {
+                    var yearStr = productionYear.Value.ToString();
+                    var partialMatchesWithYear = searchMatches.Where(x => {
+                        var norm = NormalizeShowName(x.Name);
+                        return (norm.Contains(normalizedName) || normalizedName.Contains(norm)) && norm.Contains(yearStr);
+                    }).ToList();
+
+                    if (partialMatchesWithYear.Count == 1)
+                    {
+                        _logger.LogInformation("MyEpisodes: Found online partial match containing year '{Year}' for '{ShowName}' -> '{MatchedName}' (ID: {Id})", yearStr, showName, partialMatchesWithYear[0].Name, partialMatchesWithYear[0].Id);
+                        await AddShowAsync(partialMatchesWithYear[0].Id).ConfigureAwait(false);
+                        return partialMatchesWithYear[0].Id;
+                    }
+                    else if (partialMatchesWithYear.Count > 1)
+                    {
+                        _logger.LogInformation("MyEpisodes: Multiple partial matches containing year '{Year}' online. Picking first: '{MatchedName}' (ID: {Id})", yearStr, partialMatchesWithYear[0].Name, partialMatchesWithYear[0].Id);
+                        await AddShowAsync(partialMatchesWithYear[0].Id).ConfigureAwait(false);
+                        return partialMatchesWithYear[0].Id;
+                    }
+                }
+
+                // d. Fallback to first exact match on base name if multiple existed
+                if (exactMatches.Count > 1)
+                {
+                    _logger.LogInformation("MyEpisodes: Multiple exact matches online. Picking first exact match: '{MatchedName}' (ID: {Id})", exactMatches[0].Name, exactMatches[0].Id);
+                    await AddShowAsync(exactMatches[0].Id).ConfigureAwait(false);
+                    return exactMatches[0].Id;
+                }
+
+                // e. Partial match on name only
+                var partialMatches = searchMatches.Where(x => {
+                    var norm = NormalizeShowName(x.Name);
+                    return norm.Contains(normalizedName) || normalizedName.Contains(norm);
+                }).ToList();
+
                 if (partialMatches.Count == 1)
                 {
                     _logger.LogInformation("MyEpisodes: Found online partial match for '{ShowName}' -> '{MatchedName}' (ID: {Id})", showName, partialMatches[0].Name, partialMatches[0].Id);
@@ -228,13 +310,12 @@ namespace Jellyfin.Plugin.MyEpisodes
                 }
                 else if (partialMatches.Count > 1)
                 {
-                    // Pick the first one
                     _logger.LogInformation("MyEpisodes: Multiple partial matches online. Picking first: '{MatchedName}' (ID: {Id})", partialMatches[0].Name, partialMatches[0].Id);
                     await AddShowAsync(partialMatches[0].Id).ConfigureAwait(false);
                     return partialMatches[0].Id;
                 }
 
-                // c. Fallback: pick the first search match
+                // Fallback: pick the first search match
                 _logger.LogInformation("MyEpisodes: No precise match online. Picking first result: '{MatchedName}' (ID: {Id})", searchMatches[0].Name, searchMatches[0].Id);
                 await AddShowAsync(searchMatches[0].Id).ConfigureAwait(false);
                 return searchMatches[0].Id;

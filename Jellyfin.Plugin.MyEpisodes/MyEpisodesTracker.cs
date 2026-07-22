@@ -82,6 +82,7 @@ namespace Jellyfin.Plugin.MyEpisodes
             var seriesName = episode.SeriesName;
             var seasonNumber = episode.ParentIndexNumber;
             var episodeNumber = episode.IndexNumber;
+            var productionYear = episode.ProductionYear;
 
             if (string.IsNullOrEmpty(seriesName) || seasonNumber == null || episodeNumber == null)
             {
@@ -101,7 +102,7 @@ namespace Jellyfin.Plugin.MyEpisodes
                 try
                 {
                     var client = GetClientForUser(userConfig);
-                    var showId = await client.FindShowIdAsync(seriesName).ConfigureAwait(false);
+                    var showId = await client.FindShowIdAsync(seriesName, productionYear).ConfigureAwait(false);
 
                     if (showId == null)
                     {
