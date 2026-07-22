@@ -5,7 +5,7 @@
         <Nullable>enable</Nullable>
     </PropertyGroup>
     <ItemGroup>
-        <PackageReference Include="AngleSharp" Version="0.17.0" />
+        <PackageReference Include="AngleSharp" Version="1.5.2" />
         <PackageReference Include="Jellyfin.Controller" Version="10.11.11" ExcludeAssets="runtime" />
         <PackageReference Include="Jellyfin.Model" Version="10.11.11" ExcludeAssets="runtime" />
     </ItemGroup>
