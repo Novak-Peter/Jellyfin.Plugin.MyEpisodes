@@ -369,6 +369,17 @@ public class MyEpisodesClient : IDisposable
             {
                 Content = content
             };
+            // Mimic browser request headers
+            request.Headers.Accept.Clear();
+            request.Headers.Accept.ParseAdd("application/json, text/javascript, */*; q=0.01");
+            request.Headers.Referrer = new Uri($"https://www.myepisodes.com/show/id-{showId}/");
+            request.Headers.AcceptLanguage.Clear();
+            request.Headers.AcceptLanguage.ParseAdd("en-US,en-GB;q=0.9,en;q=0.8,hu-HU;q=0.7,hu;q=0.6");
+            request.Headers.Add("X-Requested-With", "XMLHttpRequest");
+            request.Headers.Add("Origin", "https://www.myepisodes.com");
+            request.Headers.Add("Cache-Control", "no-cache");
+            request.Headers.Pragma.ParseAdd("no-cache");
+            request.Headers.Add("Priority", "u=1, i");
 
             var response = await _httpClient.SendAsync(request).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();

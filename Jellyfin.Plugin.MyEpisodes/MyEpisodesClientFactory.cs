@@ -36,8 +36,6 @@ public class MyEpisodesClientFactory : IMyEpisodesClientFactory
 
         httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
-        httpClient.DefaultRequestHeaders.Accept.ParseAdd(
-            "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
         httpClient.DefaultRequestHeaders.AcceptLanguage.ParseAdd("en-US,en;q=0.9");
 
         return new MyEpisodesClient(username, password, httpClient, logger);
