@@ -94,7 +94,7 @@ public class MyEpisodesClient : IDisposable
 
             // Parse HTML outside the lock (await not allowed inside lock)
             var document = await _htmlParser.ParseDocumentAsync(html).ConfigureAwait(false);
-            var links = document.QuerySelectorAll("a[href^='/show/']");
+            var links = document.QuerySelectorAll("a[href^='/epsbyshow/']");
 
             lock (_shows)
             {
@@ -104,7 +104,7 @@ public class MyEpisodesClient : IDisposable
                     var href = link.GetAttribute("href");
                     // Expected format: /show/<id>/... or /show/<id>
                     var segments = href?.Split('/', StringSplitOptions.RemoveEmptyEntries);
-                    if (segments != null && segments.Length >= 2 && int.TryParse(segments[1], out var id))
+                    if (segments is { Length: >= 2 } && int.TryParse(segments[1], out var id))
                     {
                         var name = link.TextContent.Trim();
                         var normalized = NormalizeShowName(name);
@@ -216,7 +216,7 @@ public class MyEpisodesClient : IDisposable
             // Find show links in search results
             var searchMatches = new List<(string Name, int Id)>();
             var document = await _htmlParser.ParseDocumentAsync(html).ConfigureAwait(false);
-            var linkElements = document.QuerySelectorAll("a[href^='/show/']");
+            var linkElements = document.QuerySelectorAll("a[href^='/epsbyshow/']");
             foreach (var link in linkElements)
             {
                 var href = link.GetAttribute("href");

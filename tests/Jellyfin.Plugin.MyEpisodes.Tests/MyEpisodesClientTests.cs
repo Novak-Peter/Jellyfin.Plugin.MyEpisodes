@@ -110,8 +110,8 @@ public class MyEpisodesClientTests
         var searchHtml = """
                          <html>
                              <body>
-                                 <a href="/show/102/">Doctor Who (2005)</a>
-                                 <a href="/show/103/">Doctor Who (1963)</a>
+                                 <a href="/epsbyshow/102/Doctor Who (2005)">Doctor Who (2005)</a>
+                                 <a href="/epsbyshow/103/Doctor Who (1963)">Doctor Who (1963)</a>
                              </body>
                          </html>
                          """;
@@ -134,8 +134,8 @@ public class MyEpisodesClientTests
         var searchHtml = """
                          <html>
                              <body>
-                                 <a href="/show/101/">Doctor Who</a>
-                                 <a href="/show/102/">Doctor Who (2005)</a>
+                                 <a href="/epsbyshow/101/Doctor Who">Doctor Who</a>
+                                 <a href="/epsbyshow/102/Doctor Who (2005)">Doctor Who (2005)</a>
                              </body>
                          </html>
                          """;
@@ -158,9 +158,9 @@ public class MyEpisodesClientTests
         var searchHtml = """
                          <html>
                              <body>
-                                 <a href="/show/103/">Doctor Who (2005)</a>
-                                 <a href="/show/101/">Doctor Who</a>
-                                 <a href="/show/102/">Doctor Who</a>
+                                 <a href="/epsbyshow/103/Doctor Who (2005)">Doctor Who (2005)</a>
+                                 <a href="/epsbyshow/101/Doctor Who">Doctor Who</a>
+                                 <a href="/epsbyshow/102/Doctor Who">Doctor Who</a>
                              </body>
                          </html>
                          """;
@@ -183,9 +183,9 @@ public class MyEpisodesClientTests
         var searchHtml = """
                          <html>
                              <body>
-                                 <a href="/show/103/">Doctor Who (2005)</a>
-                                 <a href="/show/101/">Doctor Who</a>
-                                 <a href="/show/102/">Doctor Who</a>
+                                 <a href="/epsbyshow/103/Doctor Who (2005)">Doctor Who (2005)</a>
+                                 <a href="/epsbyshow/101/Doctor Who">Doctor Who</a>
+                                 <a href="/epsbyshow/102/Doctor Who">Doctor Who</a>
                              </body>
                          </html>
                          """;
