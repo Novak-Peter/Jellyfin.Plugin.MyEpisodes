@@ -102,7 +102,6 @@ public class MyEpisodesClient : IDisposable
                 foreach (var link in links)
                 {
                     var href = link.GetAttribute("href");
-                    // Expected format: /show/<id>/... or /show/<id>
                     var segments = href?.Split('/', StringSplitOptions.RemoveEmptyEntries);
                     if (segments is { Length: >= 2 } && int.TryParse(segments[1], out var id))
                     {
@@ -125,6 +124,11 @@ public class MyEpisodesClient : IDisposable
 
     public async Task<int?> FindShowIdAsync(string showName, int? productionYear = null)
     {
+        if (_shows.Count == 0)
+        {
+            await PopulateShowsAsync().ConfigureAwait(false);
+        }
+
         if (string.IsNullOrEmpty(showName))
         {
             return null;
@@ -320,6 +324,14 @@ public class MyEpisodesClient : IDisposable
 
     public async Task AddShowAsync(int showId)
     {
+        lock (_shows)
+        {
+            if (_shows.ContainsValue(showId))
+            {
+                return;
+            }
+        }
+
         _logger.LogInformation("MyEpisodes: Adding show ID {ShowId} to {Username}'s account", showId, _username);
         try
         {
