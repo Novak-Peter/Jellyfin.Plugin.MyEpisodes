@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+    using System.Text.RegularExpressions;
 using AngleSharp.Html.Parser;
 using Microsoft.Extensions.Logging;
 
@@ -10,7 +10,6 @@ public class MyEpisodesClient : IDisposable
     private readonly string _password;
     private readonly ILogger _logger;
     private readonly HttpClient _httpClient;
-    private string? _cookieHeader;
     public string Username => _username;
     public string Password => _password;
     private readonly Dictionary<string, int> _shows = new(StringComparer.OrdinalIgnoreCase);
@@ -45,6 +44,8 @@ public class MyEpisodesClient : IDisposable
                 { "action", "Login" },
                 { "u", "" }
             });
+            
+            _logger.LogInformation("MyEpisodes: Attempting login for user {Username}", _username);
 
             var request = new HttpRequestMessage(HttpMethod.Post, "/login/")
             {
@@ -56,19 +57,15 @@ public class MyEpisodesClient : IDisposable
 
             var html = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
-            // Verification matching Kodi plugin: check if the username (case-insensitive) is in the returned content
+            // Verify login by checking for the username (case-insensitive) is in the response HTML
             if (html.Contains(_username, StringComparison.OrdinalIgnoreCase))
             {
-                if (response.Headers.TryGetValues("Set-Cookie", out var cookies))
-                {
-                    _cookieHeader = string.Join("; ", cookies.Select(c => c.Split(';')[0]));
-                }
                 _isLoggedIn = true;
                 _logger.LogInformation("MyEpisodes: Successfully logged in as {Username}", _username);
                 return true;
             }
 
-            _logger.LogWarning("MyEpisodes: Login failed for {Username}. Username not found in page response.", _username);
+            _logger.LogWarning("MyEpisodes: Login failed for {Username}. Username not found in response HTML.", _username);
             return false;
         }
         catch (Exception ex)
@@ -89,11 +86,7 @@ public class MyEpisodesClient : IDisposable
         try
         {
             var request = new HttpRequestMessage(HttpMethod.Get, "/myshows/list/");
-            if (!string.IsNullOrEmpty(_cookieHeader))
-            {
-                request.Headers.Add("Cookie", _cookieHeader);
-            }
-
+            
             var response = await _httpClient.SendAsync(request).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 
@@ -214,10 +207,6 @@ public class MyEpisodesClient : IDisposable
             {
                 Content = content
             };
-            if (!string.IsNullOrEmpty(_cookieHeader))
-            {
-                request.Headers.Add("Cookie", _cookieHeader);
-            }
 
             var response = await _httpClient.SendAsync(request).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
@@ -344,10 +333,6 @@ public class MyEpisodesClient : IDisposable
             {
                 Content = content
             };
-            if (!string.IsNullOrEmpty(_cookieHeader))
-            {
-                request.Headers.Add("Cookie", _cookieHeader);
-            }
 
             var response = await _httpClient.SendAsync(request).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
@@ -384,10 +369,6 @@ public class MyEpisodesClient : IDisposable
             {
                 Content = content
             };
-            if (!string.IsNullOrEmpty(_cookieHeader))
-            {
-                request.Headers.Add("Cookie", _cookieHeader);
-            }
 
             var response = await _httpClient.SendAsync(request).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();

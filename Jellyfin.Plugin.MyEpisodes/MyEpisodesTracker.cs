@@ -14,6 +14,8 @@ public class MyEpisodesTracker : IHostedService, IDisposable
     private readonly Dictionary<string, MyEpisodesClient> _clients = new();
     private bool _isDisposed;
 
+    public event EventHandler<TrackingCompletedEventArgs>? TrackingCompleted;
+
     public MyEpisodesTracker(IUserDataManager userDataManager, ILogger<MyEpisodesTracker> logger, IMyEpisodesClientFactory clientFactory)
     {
         _userDataManager = userDataManager;
@@ -49,18 +51,21 @@ public class MyEpisodesTracker : IHostedService, IDisposable
     {
         if (e.Item is not Episode episode)
         {
+            TrackingCompleted?.Invoke(this, new TrackingCompletedEventArgs { IsSuccess = false });
             return;
         }
 
         // Only act when user explicitly toggles played status or playback finishes
         if (e.SaveReason != UserDataSaveReason.TogglePlayed && e.SaveReason != UserDataSaveReason.PlaybackFinished)
         {
+            TrackingCompleted?.Invoke(this, new TrackingCompletedEventArgs { IsSuccess = false });
             return;
         }
 
         var config = Plugin.Instance?.Configuration;
         if (config == null)
         {
+            TrackingCompleted?.Invoke(this, new TrackingCompletedEventArgs { IsSuccess = false });
             return;
         }
 
@@ -69,8 +74,9 @@ public class MyEpisodesTracker : IHostedService, IDisposable
             string.Equals(u.JellyfinUserId, userIdStr, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(u.JellyfinUserId, e.UserId.ToString(), StringComparison.OrdinalIgnoreCase));
 
-        if (userConfig == null || !userConfig.SyncWatched || string.IsNullOrEmpty(userConfig.Username) || string.IsNullOrEmpty(userConfig.Password))
+        if (userConfig is not { SyncWatched: true } || string.IsNullOrEmpty(userConfig.Username) || string.IsNullOrEmpty(userConfig.Password))
         {
+            TrackingCompleted?.Invoke(this, new TrackingCompletedEventArgs { IsSuccess = false });
             return;
         }
 
@@ -83,6 +89,7 @@ public class MyEpisodesTracker : IHostedService, IDisposable
         {
             _logger.LogWarning("MyEpisodes: Missing metadata for episode. Series: '{SeriesName}', Season: {Season}, Episode: {Episode}",
                 seriesName ?? "Unknown", seasonNumber, episodeNumber);
+            TrackingCompleted?.Invoke(this, new TrackingCompletedEventArgs { IsSuccess = false });
             return;
         }
 
@@ -91,7 +98,6 @@ public class MyEpisodesTracker : IHostedService, IDisposable
         _logger.LogInformation("MyEpisodes: Queueing watched state sync for user {Username}. '{SeriesName}' S{Season}E{Episode} -> Played: {Played}",
             userConfig.Username, seriesName, seasonNumber.Value, episodeNumber.Value, played);
 
-        // Run in background task to avoid blocking the main server thread
         _ = Task.Run(async () =>
         {
             try
@@ -102,25 +108,29 @@ public class MyEpisodesTracker : IHostedService, IDisposable
                 if (showId == null)
                 {
                     _logger.LogWarning("MyEpisodes: Could not resolve MyEpisodes show ID for series '{SeriesName}'", seriesName);
+                    TrackingCompleted?.Invoke(this, new TrackingCompletedEventArgs { IsSuccess = false });
                     return;
                 }
 
-                bool success = await client.SetEpisodeWatchedStateAsync(showId.Value, seasonNumber.Value, episodeNumber.Value, played).ConfigureAwait(false);
+                var success = await client.SetEpisodeWatchedStateAsync(showId.Value, seasonNumber.Value, episodeNumber.Value, played).ConfigureAwait(false);
                 if (success)
                 {
                     _logger.LogInformation("MyEpisodes: Successfully synced S{Season}E{Episode} of '{SeriesName}' to MyEpisodes.com",
                         seasonNumber.Value, episodeNumber.Value, seriesName);
+                    TrackingCompleted?.Invoke(this, new TrackingCompletedEventArgs { IsSuccess = true });
                 }
                 else
                 {
                     _logger.LogWarning("MyEpisodes: Failed to sync S{Season}E{Episode} of '{SeriesName}' to MyEpisodes.com",
                         seasonNumber.Value, episodeNumber.Value, seriesName);
+                    TrackingCompleted?.Invoke(this, new TrackingCompletedEventArgs { IsSuccess = false });
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "MyEpisodes: Exception error while syncing episode S{Season}E{Episode} of '{SeriesName}'",
                     seasonNumber.Value, episodeNumber.Value, seriesName);
+                TrackingCompleted?.Invoke(this, new TrackingCompletedEventArgs { IsSuccess = false, Exception = ex });
             }
         });
     }
@@ -174,4 +184,10 @@ public class MyEpisodesTracker : IHostedService, IDisposable
             _isDisposed = true;
         }
     }
+}
+
+
+public class TrackingCompletedEventArgs : EventArgs {
+    public bool IsSuccess { get; init; }
+    public Exception? Exception { get; init; }
 }
