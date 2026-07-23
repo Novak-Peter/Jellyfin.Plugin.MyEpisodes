@@ -83,7 +83,7 @@ public class MyEpisodesTracker : IHostedService, IDisposable
         var seriesName = episode.SeriesName;
         var seasonNumber = episode.ParentIndexNumber;
         var episodeNumber = episode.IndexNumber;
-        var productionYear = episode.ProductionYear;
+        var productionYear = episode.Series?.ProductionYear;
 
         if (string.IsNullOrEmpty(seriesName) || seasonNumber == null || episodeNumber == null)
         {
