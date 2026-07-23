@@ -435,6 +435,7 @@ public class MyEpisodesClient : IDisposable
     {
         if (!_isDisposed)
         {
+            _httpClient.Dispose();
             _isDisposed = true;
         }
     }
