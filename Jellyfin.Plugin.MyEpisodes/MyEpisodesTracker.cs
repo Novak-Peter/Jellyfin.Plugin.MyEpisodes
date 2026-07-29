@@ -190,7 +190,7 @@ public class MyEpisodesTracker : IHostedService, IDisposable
             {
                 try
                 {
-                    var client = GetClientForUser(userConfigs.First());
+                    var client = GetClientForUser(userConfig);
                     var showId = await client.FindOrAddShowAsync(seriesName, productionYear).ConfigureAwait(false);
 
                     if (showId == null)
