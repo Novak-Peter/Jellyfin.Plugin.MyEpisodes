@@ -31,6 +31,7 @@ class Program
             var builder = Host.CreateApplicationBuilder();
             builder.Services.AddSingleton<IServerApplicationHost, StubServerApplicationHost>();
             builder.Services.AddSingleton<IUserDataManager, StubUserDataManager>();
+            builder.Services.AddSingleton<ILibraryManager, StubLibraryManager>();
 
             var registrator = new PluginServiceRegistrator();
             var hostStub = builder.Services.BuildServiceProvider().GetRequiredService<IServerApplicationHost>();

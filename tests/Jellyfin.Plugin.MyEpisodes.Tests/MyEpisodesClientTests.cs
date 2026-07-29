@@ -43,7 +43,7 @@ public class MyEpisodesClientTests
             .Build();
 
         // Act
-        var showId = await client.FindShowIdAsync("Doctor Who", 2005);
+        var showId = await client.FindOrAddShowAsync("Doctor Who", 2005);
 
         // Assert
         Assert.Equal(102, showId);
@@ -67,7 +67,7 @@ public class MyEpisodesClientTests
             .Build();
 
         // Act
-        var showId = await client.FindShowIdAsync("Doctor Who", 2005);
+        var showId = await client.FindOrAddShowAsync("Doctor Who", 2005);
 
         // Assert
         Assert.Equal(101, showId);
@@ -92,7 +92,7 @@ public class MyEpisodesClientTests
             .Build();
 
         // Act
-        var showId = await client.FindShowIdAsync("Doctor Who", 2005);
+        var showId = await client.FindOrAddShowAsync("Doctor Who", 2005);
 
         // Assert
         Assert.Equal(103, showId);
@@ -117,7 +117,7 @@ public class MyEpisodesClientTests
             .Build();
 
         // Act
-        var showId = await client.FindShowIdAsync("Doctor Who", 1963);
+        var showId = await client.FindOrAddShowAsync("Doctor Who", 1963);
 
         // Assert
         Assert.Equal(101, showId);

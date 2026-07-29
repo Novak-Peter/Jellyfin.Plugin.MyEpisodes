@@ -19,7 +19,14 @@
                     <input type="password" id="txtPassword" name="txtPassword" is="emby-input" required />
                     <div class="fieldDescription">Your MyEpisodes.com password. Credentials are saved securely on the server.</div>
                 </div>
-
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label>
+                        <input type="checkbox" id="chkSyncAcquired" name="chkSyncAcquired" is="emby-checkbox" />
+                        <span>Sync acquired status</span>
+                    </label>
+                    <div class="fieldDescription">Automatically mark episodes as acquired on MyEpisodes.com item added to library in Jellyfin.</div>
+                </div>
+                
                 <div class="checkboxContainer checkboxContainer-withDescription">
                     <label>
                         <input type="checkbox" id="chkSyncWatched" name="chkSyncWatched" is="emby-checkbox" />
@@ -49,10 +56,11 @@
                     document.querySelector('#txtUsername').value = userConfig.Username || '';
                     document.querySelector('#txtPassword').value = userConfig.Password || '';
                     document.querySelector('#chkSyncWatched').checked = userConfig.SyncWatched !== false;
+                    document.querySelector('#chkSyncAcquired').checked = userConfig.SyncAcquired !== false;
                 } else {
                     document.querySelector('#txtUsername').value = '';
                     document.querySelector('#txtPassword').value = '';
-                    document.querySelector('#chkSyncWatched').checked = true;
+                    document.querySelector('#chkSyncAcquired').checked = true;
                 }
             }
 
@@ -111,7 +119,8 @@
                         JellyfinUserId: selectedUserId,
                         Username: document.querySelector('#txtUsername').value,
                         Password: document.querySelector('#txtPassword').value,
-                        SyncWatched: document.querySelector('#chkSyncWatched').checked
+                        SyncWatched: document.querySelector('#chkSyncWatched').checked,
+                        SyncAcquired: document.querySelector('#chkSyncAcquired').checked,
                     };
 
                     if (userConfigIndex > -1) {

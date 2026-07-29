@@ -9,6 +9,7 @@ namespace Jellyfin.Plugin.MyEpisodes;
 public class MyEpisodesTracker : IHostedService, IDisposable
 {
     private readonly IUserDataManager _userDataManager;
+    private readonly ILibraryManager _libraryManager;
     private readonly ILogger<MyEpisodesTracker> _logger;
     private readonly IMyEpisodesClientFactory _clientFactory;
     private readonly Dictionary<string, MyEpisodesClient> _clients = new();
@@ -16,9 +17,10 @@ public class MyEpisodesTracker : IHostedService, IDisposable
 
     public event EventHandler<TrackingCompletedEventArgs>? TrackingCompleted;
 
-    public MyEpisodesTracker(IUserDataManager userDataManager, ILogger<MyEpisodesTracker> logger, IMyEpisodesClientFactory clientFactory)
+    public MyEpisodesTracker(IUserDataManager userDataManager, ILibraryManager libraryManager, ILogger<MyEpisodesTracker> logger, IMyEpisodesClientFactory clientFactory)
     {
         _userDataManager = userDataManager;
+        _libraryManager = libraryManager;
         _logger = logger;
         _clientFactory = clientFactory;
     }
@@ -27,6 +29,7 @@ public class MyEpisodesTracker : IHostedService, IDisposable
     {
         _logger.LogInformation("MyEpisodes: Starting playback and user data tracker");
         _userDataManager.UserDataSaved += OnUserDataSaved;
+        _libraryManager.ItemAdded += OnLibraryItemAdded;
         return Task.CompletedTask;
     }
 
@@ -34,6 +37,7 @@ public class MyEpisodesTracker : IHostedService, IDisposable
     {
         _logger.LogInformation("MyEpisodes: Stopping playback and user data tracker");
         _userDataManager.UserDataSaved -= OnUserDataSaved;
+        _libraryManager.ItemAdded -= OnLibraryItemAdded;
 
         lock (_clients)
         {
@@ -93,17 +97,17 @@ public class MyEpisodesTracker : IHostedService, IDisposable
             return;
         }
 
-        var played = e.UserData.Played;
+        var status = e.UserData.Played ? EpisodeStatus.Watched : EpisodeStatus.Unwatched;
 
-        _logger.LogInformation("MyEpisodes: Queueing watched state sync for user {Username}. '{SeriesName}' S{Season}E{Episode} -> Played: {Played}",
-            userConfig.Username, seriesName, seasonNumber.Value, episodeNumber.Value, played);
+        _logger.LogInformation("MyEpisodes: Queueing watched state sync for user {Username}. '{SeriesName}' S{Season}E{Episode} -> Status: {Status}",
+            userConfig.Username, seriesName, seasonNumber.Value, episodeNumber.Value, status);
 
         _ = Task.Run(async () =>
         {
             try
             {
                 var client = GetClientForUser(userConfig);
-                var showId = await client.FindShowIdAsync(seriesName, productionYear).ConfigureAwait(false);
+                var showId = await client.FindOrAddShowAsync(seriesName, productionYear).ConfigureAwait(false);
 
                 if (showId == null)
                 {
@@ -112,7 +116,7 @@ public class MyEpisodesTracker : IHostedService, IDisposable
                     return;
                 }
 
-                var success = await client.SetEpisodeWatchedStateAsync(showId.Value, seasonNumber.Value, episodeNumber.Value, played).ConfigureAwait(false);
+                var success = await client.UpdateEpisodeStatus(showId.Value, seasonNumber.Value, episodeNumber.Value, status).ConfigureAwait(false);
                 if (success)
                 {
                     _logger.LogInformation("MyEpisodes: Successfully synced S{Season}E{Episode} of '{SeriesName}' to MyEpisodes.com",
@@ -135,6 +139,102 @@ public class MyEpisodesTracker : IHostedService, IDisposable
         });
     }
 
+    private void OnLibraryItemAdded(object? sender, ItemChangeEventArgs e)
+    {
+        if (e.Item is not Episode episode)
+        {
+            TrackingCompleted?.Invoke(this, new TrackingCompletedEventArgs { IsSuccess = false });
+            return;
+        }
+        
+        var seriesName = episode.SeriesName;
+        var seasonNumber = episode.ParentIndexNumber;
+        var episodeNumber = episode.IndexNumber;
+        var productionYear = episode.Series?.ProductionYear;
+
+        if (string.IsNullOrEmpty(seriesName) || seasonNumber == null || episodeNumber == null)
+        {
+            _logger.LogWarning("MyEpisodes: Missing metadata for episode. Series: '{SeriesName}', Season: {Season}, Episode: {Episode}",
+                seriesName ?? "Unknown", seasonNumber, episodeNumber);
+            TrackingCompleted?.Invoke(this, new TrackingCompletedEventArgs { IsSuccess = false });
+            return;
+        }
+
+        var config = Plugin.Instance?.Configuration;
+        if (config == null)
+        {
+            TrackingCompleted?.Invoke(this, new TrackingCompletedEventArgs { IsSuccess = false });
+            return;
+        }
+        
+        var userConfigs = config.UserConfigurations.Where(userConfig => 
+            userConfig is { SyncAcquired: true }
+            && !string.IsNullOrWhiteSpace(userConfig.JellyfinUserId)
+            && !string.IsNullOrEmpty(userConfig.Username)
+            && !string.IsNullOrEmpty(userConfig.Password)).ToList();
+
+        if (userConfigs.Count == 0)
+        {
+            _logger.LogInformation("MyEpisodes: No user configuration is found to track acquiring Series: '{SeriesName}', Season: {Season}, Episode: {Episode}",
+                seriesName, seasonNumber, episodeNumber);
+            TrackingCompleted?.Invoke(this, new TrackingCompletedEventArgs { IsSuccess = false });
+            return;
+        }
+
+            
+        _ = Task.Run(async () =>
+        {
+            var aggregatedExceptions = new List<Exception>(userConfigs.Count);
+            var aggregatedSuccess = true;
+            foreach (var userConfig in userConfigs)
+            {
+                try
+                {
+                    var client = GetClientForUser(userConfigs.First());
+                    var showId = await client.FindOrAddShowAsync(seriesName, productionYear).ConfigureAwait(false);
+
+                    if (showId == null)
+                    {
+                        _logger.LogWarning("MyEpisodes: Could not resolve MyEpisodes show ID for series '{SeriesName}'",
+                            seriesName); 
+                        aggregatedSuccess = false;
+                        continue;
+                    }
+                    var success = await client
+                        .UpdateEpisodeStatus(showId.Value, seasonNumber.Value, episodeNumber.Value,
+                            EpisodeStatus.Acquired).ConfigureAwait(false);
+                    if (success)
+                    {
+                        _logger.LogInformation(
+                            "MyEpisodes: Successfully synced Acquired status S{Season}E{Episode} of '{SeriesName}' to MyEpisodes.com  for User {Username}",
+                            seasonNumber.Value, episodeNumber.Value, seriesName, userConfig.Username);
+                    }
+                    else
+                    {
+                        _logger.LogWarning(
+                            "MyEpisodes: Failed to sync Acquired status S{Season}E{Episode} of '{SeriesName}' to MyEpisodes.com for User {Username}",
+                            seasonNumber.Value, episodeNumber.Value, seriesName,  userConfig.Username);
+                    }
+                    aggregatedSuccess &= success;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex,
+                        "MyEpisodes: Exception error while syncing acquired status for episode S{Season}E{Episode} of '{SeriesName}' for User {Username}",
+                        seasonNumber.Value, episodeNumber.Value, seriesName, userConfig.Username);
+                    aggregatedExceptions.Add(ex);
+                    aggregatedSuccess = false;
+                }
+            }
+            TrackingCompleted?.Invoke(this, new TrackingCompletedEventArgs 
+                { 
+                    IsSuccess = aggregatedSuccess,
+                    Exception = aggregatedExceptions.Count > 1 ? new AggregateException(aggregatedExceptions) : aggregatedExceptions.FirstOrDefault()
+                });
+        });
+    }
+
+    
     private MyEpisodesClient GetClientForUser(MyEpisodesUserConfiguration userConfig)
     {
         var cacheKey = userConfig.JellyfinUserId;

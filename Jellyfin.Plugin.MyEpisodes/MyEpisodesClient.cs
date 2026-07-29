@@ -4,6 +4,14 @@ using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.MyEpisodes;
 
+public enum EpisodeStatus
+{
+    Acquired,
+    Unacquired,
+    Watched,
+    Unwatched,
+}
+
 public class MyEpisodesClient : IDisposable
 {
     private readonly string _username;
@@ -13,7 +21,7 @@ public class MyEpisodesClient : IDisposable
     public string Username => _username;
     public string Password => _password;
     private readonly Dictionary<string, int> _shows = new(StringComparer.OrdinalIgnoreCase);
-    private static readonly AngleSharp.Html.Parser.HtmlParser _htmlParser = new AngleSharp.Html.Parser.HtmlParser();
+    private static readonly HtmlParser _htmlParser = new();
     private bool _isLoggedIn;
     private bool _isDisposed;
 
@@ -122,7 +130,7 @@ public class MyEpisodesClient : IDisposable
         }
     }
 
-    public async Task<int?> FindShowIdAsync(string showName, int? productionYear = null)
+    public async Task<int?> FindOrAddShowAsync(string showName, int? productionYear = null)
     {
         if (_shows.Count == 0)
         {
@@ -133,12 +141,7 @@ public class MyEpisodesClient : IDisposable
         {
             return null;
         }
-
-        if (!await EnsureLoggedInAsync().ConfigureAwait(false))
-        {
-            return null;
-        }
-
+        
         var normalizedName = NormalizeShowName(showName);
         if (string.IsNullOrEmpty(normalizedName))
         {
@@ -358,23 +361,33 @@ public class MyEpisodesClient : IDisposable
         }
     }
 
-    public async Task<bool> SetEpisodeWatchedStateAsync(int showId, int seasonNumber, int episodeNumber, bool watched)
+    public async Task<bool> UpdateEpisodeStatus(int showId, int seasonNumber, int episodeNumber, EpisodeStatus episodeStatus)
     {
         if (!await EnsureLoggedInAsync().ConfigureAwait(false))
         {
             return false;
         }
 
-        _logger.LogInformation("MyEpisodes: Setting watched state for Show ID {ShowId}, S{Season}E{Episode} to {Watched} for {Username}",
-            showId, seasonNumber, episodeNumber, watched, _username);
+        _logger.LogInformation("MyEpisodes: Setting watched state for Show ID {ShowId}, S{Season}E{Episode} to {Status} for {Username}",
+            showId, seasonNumber, episodeNumber, episodeStatus, _username);
 
+        
+        var (action, statusUpdate) = episodeStatus switch
+        {
+            EpisodeStatus.Acquired => ("A", true),
+            EpisodeStatus.Watched => ("V", true),
+            EpisodeStatus.Unacquired => ("A", false),
+            EpisodeStatus.Unwatched => ("V", false),
+            _ => throw new ArgumentOutOfRangeException(nameof(episodeStatus), episodeStatus, null)
+        };
+        
         try
         {
-            // Key format: V[show_id]-[season]-[episode]
-            var key = $"V{showId}-{seasonNumber}-{episodeNumber}";
+            // Key format: [V/A][show_id]-[season]-[episode]
+            var key = $"{action}{showId}-{seasonNumber}-{episodeNumber}";
             var content = new FormUrlEncodedContent(new Dictionary<string, string>
             {
-                { key, watched.ToString().ToLowerInvariant() }
+                { key, statusUpdate.ToString().ToLowerInvariant() }
             });
 
             var request = new HttpRequestMessage(HttpMethod.Post, "/ajax/service.php?mode=eps_update")
@@ -396,8 +409,8 @@ public class MyEpisodesClient : IDisposable
             var response = await _httpClient.SendAsync(request).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 
-            _logger.LogInformation("MyEpisodes: Successfully updated watched state for Show ID {ShowId}, S{Season}E{Episode} to {Watched}",
-                showId, seasonNumber, episodeNumber, watched);
+            _logger.LogInformation("MyEpisodes: Successfully updated Show ID {ShowId}, S{Season}E{Episode} to {Status}",
+                showId, seasonNumber, episodeNumber, episodeStatus);
             return true;
         }
         catch (Exception ex)

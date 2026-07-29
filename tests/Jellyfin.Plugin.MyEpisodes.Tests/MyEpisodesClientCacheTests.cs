@@ -23,7 +23,7 @@ public class MyEpisodesClientCacheTests
             .WithMyShowsListResponse(myShowsHtml);
         var (client, handlerMock) = builder.Build();
 
-        var showId = await client.FindShowIdAsync("Doctor Who", null);
+        var showId = await client.FindOrAddShowAsync("Doctor Who", null);
         Assert.Equal(200, showId);
         // Verify that a GET to /myshows/list/ was made
         handlerMock.Protected().Verify(
@@ -54,13 +54,13 @@ public class MyEpisodesClientCacheTests
         var (client, handlerMock) = builder.Build();
 
         // First call populates cache
-        var firstId = await client.FindShowIdAsync("Doctor Who", null);
+        var firstId = await client.FindOrAddShowAsync("Doctor Who", null);
         Assert.Equal(200, firstId);
         // Reset mock invocation count
         handlerMock.Invocations.Clear();
 
         // Second call should hit cache only
-        var secondId = await client.FindShowIdAsync("Doctor Who", null);
+        var secondId = await client.FindOrAddShowAsync("Doctor Who", null);
         Assert.Equal(200, secondId);
         // No network calls should happen on second call
         handlerMock.Protected().Verify(
