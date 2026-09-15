@@ -63,7 +63,7 @@ class Program
                     Id = targetUserGuid
                 };
                 var fakeItem = new Episode()
-                    { SeriesName = "The Night Manager", ParentIndexNumber = 2, IndexNumber = 1 };
+                    { SeriesName = "Slow Horses", ParentIndexNumber = 5, IndexNumber = 1 };
                 var fakeData = new UserItemData { Key = "", Played = true };
                 userDataManager.SaveUserData(user, fakeItem, fakeData, UserDataSaveReason.PlaybackFinished, CancellationToken.None);
                 await trackingSignal.Task.ConfigureAwait(false);

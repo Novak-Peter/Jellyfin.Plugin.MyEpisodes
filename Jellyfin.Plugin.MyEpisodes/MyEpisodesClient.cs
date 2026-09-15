@@ -1,5 +1,7 @@
-    using System.Text.RegularExpressions;
-using AngleSharp.Html.Parser;
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.MyEpisodes;
@@ -12,121 +14,93 @@ public enum EpisodeStatus
     Unwatched,
 }
 
+public class ShowDto
+{
+    [JsonPropertyName("showid")]
+    public int ShowId { get; set; }
+
+    [JsonPropertyName("showname")]
+    public string ShowName { get; set; } = string.Empty;
+}
+
+public class ShowsResponseDto
+{
+    [JsonPropertyName("data")]
+    public List<ShowDto>? Data { get; set; }
+}
+
+public class EpisodeUpdateItemDto
+{
+    [JsonPropertyName("showid")]
+    public int ShowId { get; set; }
+
+    [JsonPropertyName("season")]
+    public int Season { get; set; }
+
+    [JsonPropertyName("episode")]
+    public int Episode { get; set; }
+
+    [JsonPropertyName("watched")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Watched { get; set; }
+
+    [JsonPropertyName("acquired")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Acquired { get; set; }
+}
+
+public class BulkEpisodeRequestDto
+{
+    [JsonPropertyName("episodes")]
+    public List<EpisodeUpdateItemDto> Episodes { get; set; } = new();
+}
+
 public class MyEpisodesClient : IDisposable
 {
-    private readonly string _username;
-    private readonly string _password;
-    private readonly ILogger _logger;
+    private readonly string _apiKey;
     private readonly HttpClient _httpClient;
-    public string Username => _username;
-    public string Password => _password;
+    private readonly ILogger _logger;
     private readonly Dictionary<string, int> _shows = new(StringComparer.OrdinalIgnoreCase);
-    private static readonly HtmlParser _htmlParser = new();
-    private bool _isLoggedIn;
     private bool _isDisposed;
 
-    public MyEpisodesClient(string username, string password, HttpClient httpClient, ILogger logger)
+    public MyEpisodesClient(string apiKey, HttpClient httpClient, ILogger logger)
     {
-        _username = username;
-        _password = password;
+        _apiKey = apiKey;
         _httpClient = httpClient;
         _logger = logger;
     }
 
-    public bool IsLoggedIn => _isLoggedIn;
-
-    public async Task<bool> EnsureLoggedInAsync()
-    {
-        if (_isLoggedIn)
-        {
-            return true;
-        }
-
-        _logger.LogInformation("MyEpisodes: Attempting login for user {Username}", _username);
-        try
-        {
-            var content = new FormUrlEncodedContent(new Dictionary<string, string>
-            {
-                { "username", _username },
-                { "password", _password },
-                { "action", "Login" },
-                { "u", "" }
-            });
-            
-            _logger.LogInformation("MyEpisodes: Attempting login for user {Username}", _username);
-
-            var request = new HttpRequestMessage(HttpMethod.Post, "/login/")
-            {
-                Content = content
-            };
-
-            var response = await _httpClient.SendAsync(request).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
-
-            var html = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-
-            // Verify login by checking for the username (case-insensitive) is in the response HTML
-            if (html.Contains(_username, StringComparison.OrdinalIgnoreCase))
-            {
-                _isLoggedIn = true;
-                _logger.LogInformation("MyEpisodes: Successfully logged in as {Username}", _username);
-                return true;
-            }
-
-            _logger.LogWarning("MyEpisodes: Login failed for {Username}. Username not found in response HTML.", _username);
-            return false;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "MyEpisodes: Error logging in for user {Username}", _username);
-            return false;
-        }
-    }
+    public string ApiKey => _apiKey;
 
     public async Task PopulateShowsAsync()
     {
-        if (!await EnsureLoggedInAsync().ConfigureAwait(false))
-        {
-            return;
-        }
-
-        _logger.LogInformation("MyEpisodes: Fetching shows list for {Username}", _username);
+        _logger.LogInformation("MyEpisodes: Fetching followed shows list via API");
         try
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, "/myshows/list/");
-            
-            var response = await _httpClient.SendAsync(request).ConfigureAwait(false);
+            var response = await SendWithRetryAsync(() => new HttpRequestMessage(HttpMethod.Get, "/v1/me/shows?limit=1000")).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 
-            var html = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-
-            // Parse HTML outside the lock (await not allowed inside lock)
-            var document = await _htmlParser.ParseDocumentAsync(html).ConfigureAwait(false);
-            var links = document.QuerySelectorAll("a[href^='/epsbyshow/']");
-
-            lock (_shows)
+            var result = await response.Content.ReadFromJsonAsync<ShowsResponseDto>().ConfigureAwait(false);
+            if (result?.Data is not null)
             {
-                _shows.Clear();
-                foreach (var link in links)
+                lock (_shows)
                 {
-                    var href = link.GetAttribute("href");
-                    var segments = href?.Split('/', StringSplitOptions.RemoveEmptyEntries);
-                    if (segments is { Length: >= 2 } && int.TryParse(segments[1], out var id))
+                    _shows.Clear();
+                    foreach (var show in result.Data)
                     {
-                        var name = link.TextContent.Trim();
-                        var normalized = NormalizeShowName(name);
+                        var normalized = NormalizeShowName(show.ShowName);
                         if (!string.IsNullOrEmpty(normalized))
                         {
-                            _shows.TryAdd(normalized, id);
+                            _shows.TryAdd(normalized, show.ShowId);
                         }
                     }
+                    _logger.LogInformation("MyEpisodes: Populated {Count} shows from account API", _shows.Count);
                 }
-                _logger.LogInformation("MyEpisodes: Populated {Count} shows from account", _shows.Count);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "MyEpisodes: Error populating shows for user {Username}", _username);
+            _logger.LogError(ex, "MyEpisodes: Error populating shows list via API");
         }
     }
 
@@ -200,66 +174,41 @@ public class MyEpisodesClient : IDisposable
             }
         }
 
-        // 2. Search on MyEpisodes website
-        _logger.LogInformation("MyEpisodes: '{ShowName}' not found in cache. Searching MyEpisodes.com...", showName);
+        // 2. Search on MyEpisodes API catalogue
+        _logger.LogInformation("MyEpisodes: '{ShowName}' not found in cache. Searching MyEpisodes API catalogue...", showName);
         try
         {
-            var content = new FormUrlEncodedContent(new Dictionary<string, string>
-            {
-                { "tvshow", showName },
-                { "action", "Search" }
-            });
-
-            var request = new HttpRequestMessage(HttpMethod.Post, "/search/")
-            {
-                Content = content
-            };
-
-            var response = await _httpClient.SendAsync(request).ConfigureAwait(false);
+            var response = await SendWithRetryAsync(() => new HttpRequestMessage(HttpMethod.Get, $"/v1/shows?search={Uri.EscapeDataString(showName)}")).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 
-            var html = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            var result = await response.Content.ReadFromJsonAsync<ShowsResponseDto>().ConfigureAwait(false);
+            var searchMatches = result?.Data;
 
-            // Find show links in search results
-            var searchMatches = new List<(string Name, int Id)>();
-            var document = await _htmlParser.ParseDocumentAsync(html).ConfigureAwait(false);
-            var linkElements = document.QuerySelectorAll("a[href^='/epsbyshow/']");
-            foreach (var link in linkElements)
+            if (searchMatches == null || searchMatches.Count == 0)
             {
-                var href = link.GetAttribute("href");
-                var segments = href?.Split('/', StringSplitOptions.RemoveEmptyEntries);
-                if (segments is { Length: >= 2 } && int.TryParse(segments[1], out var id))
-                {
-                    var name = link.TextContent.Trim();
-                    searchMatches.Add((name, id));
-                }
-            }
-
-            if (searchMatches.Count == 0)
-            {
-                _logger.LogWarning("MyEpisodes: Search returned no results for '{ShowName}'", showName);
+                _logger.LogWarning("MyEpisodes: API Search returned no results for '{ShowName}'", showName);
                 return null;
             }
 
             // a. Exact match on base name
-            var exactMatches = searchMatches.Where(x => string.Equals(NormalizeShowName(x.Name), normalizedName, StringComparison.OrdinalIgnoreCase)).ToList();
+            var exactMatches = searchMatches.Where(x => string.Equals(NormalizeShowName(x.ShowName), normalizedName, StringComparison.OrdinalIgnoreCase)).ToList();
             if (exactMatches.Count == 1)
             {
-                _logger.LogInformation("MyEpisodes: Found exact match online for '{ShowName}' -> '{MatchedName}' (ID: {Id})", showName, exactMatches[0].Name, exactMatches[0].Id);
-                await AddShowAsync(exactMatches[0].Id).ConfigureAwait(false);
-                return exactMatches[0].Id;
+                _logger.LogInformation("MyEpisodes: Found exact match via API for '{ShowName}' -> '{MatchedName}' (ID: {Id})", showName, exactMatches[0].ShowName, exactMatches[0].ShowId);
+                await AddShowAsync(exactMatches[0].ShowId).ConfigureAwait(false);
+                return exactMatches[0].ShowId;
             }
 
             // b. Exact match on name (year)
             if (productionYear.HasValue)
             {
                 var normalizedWithYear = NormalizeShowName($"{showName} ({productionYear.Value})");
-                var exactMatchesWithYear = searchMatches.Where(x => string.Equals(NormalizeShowName(x.Name), normalizedWithYear, StringComparison.OrdinalIgnoreCase)).ToList();
+                var exactMatchesWithYear = searchMatches.Where(x => string.Equals(NormalizeShowName(x.ShowName), normalizedWithYear, StringComparison.OrdinalIgnoreCase)).ToList();
                 if (exactMatchesWithYear.Count == 1)
                 {
-                    _logger.LogInformation("MyEpisodes: Found exact match online with year for '{ShowName}' -> '{MatchedName}' (ID: {Id})", showName, exactMatchesWithYear[0].Name, exactMatchesWithYear[0].Id);
-                    await AddShowAsync(exactMatchesWithYear[0].Id).ConfigureAwait(false);
-                    return exactMatchesWithYear[0].Id;
+                    _logger.LogInformation("MyEpisodes: Found exact match online with year for '{ShowName}' -> '{MatchedName}' (ID: {Id})", showName, exactMatchesWithYear[0].ShowName, exactMatchesWithYear[0].ShowId);
+                    await AddShowAsync(exactMatchesWithYear[0].ShowId).ConfigureAwait(false);
+                    return exactMatchesWithYear[0].ShowId;
                 }
             }
 
@@ -268,59 +217,59 @@ public class MyEpisodesClient : IDisposable
             {
                 var yearStr = productionYear.Value.ToString();
                 var partialMatchesWithYear = searchMatches.Where(x => {
-                    var norm = NormalizeShowName(x.Name);
+                    var norm = NormalizeShowName(x.ShowName);
                     return (norm.Contains(normalizedName) || normalizedName.Contains(norm)) && norm.Contains(yearStr);
                 }).ToList();
 
                 if (partialMatchesWithYear.Count == 1)
                 {
-                    _logger.LogInformation("MyEpisodes: Found online partial match containing year '{Year}' for '{ShowName}' -> '{MatchedName}' (ID: {Id})", yearStr, showName, partialMatchesWithYear[0].Name, partialMatchesWithYear[0].Id);
-                    await AddShowAsync(partialMatchesWithYear[0].Id).ConfigureAwait(false);
-                    return partialMatchesWithYear[0].Id;
+                    _logger.LogInformation("MyEpisodes: Found online partial match containing year '{Year}' for '{ShowName}' -> '{MatchedName}' (ID: {Id})", yearStr, showName, partialMatchesWithYear[0].ShowName, partialMatchesWithYear[0].ShowId);
+                    await AddShowAsync(partialMatchesWithYear[0].ShowId).ConfigureAwait(false);
+                    return partialMatchesWithYear[0].ShowId;
                 }
                 else if (partialMatchesWithYear.Count > 1)
                 {
-                    _logger.LogInformation("MyEpisodes: Multiple partial matches containing year '{Year}' online. Picking first: '{MatchedName}' (ID: {Id})", yearStr, partialMatchesWithYear[0].Name, partialMatchesWithYear[0].Id);
-                    await AddShowAsync(partialMatchesWithYear[0].Id).ConfigureAwait(false);
-                    return partialMatchesWithYear[0].Id;
+                    _logger.LogInformation("MyEpisodes: Multiple partial matches containing year '{Year}' online. Picking first: '{MatchedName}' (ID: {Id})", yearStr, partialMatchesWithYear[0].ShowName, partialMatchesWithYear[0].ShowId);
+                    await AddShowAsync(partialMatchesWithYear[0].ShowId).ConfigureAwait(false);
+                    return partialMatchesWithYear[0].ShowId;
                 }
             }
 
-            // d. Fallback to first exact match on base name if multiple existed
+            // d. Fallback to first exact match if multiple existed
             if (exactMatches.Count > 1)
             {
-                _logger.LogInformation("MyEpisodes: Multiple exact matches online. Picking first exact match: '{MatchedName}' (ID: {Id})", exactMatches[0].Name, exactMatches[0].Id);
-                await AddShowAsync(exactMatches[0].Id).ConfigureAwait(false);
-                return exactMatches[0].Id;
+                _logger.LogInformation("MyEpisodes: Multiple exact matches online. Picking first: '{MatchedName}' (ID: {Id})", exactMatches[0].ShowName, exactMatches[0].ShowId);
+                await AddShowAsync(exactMatches[0].ShowId).ConfigureAwait(false);
+                return exactMatches[0].ShowId;
             }
 
             // e. Partial match on name only
             var partialMatches = searchMatches.Where(x => {
-                var norm = NormalizeShowName(x.Name);
+                var norm = NormalizeShowName(x.ShowName);
                 return norm.Contains(normalizedName) || normalizedName.Contains(norm);
             }).ToList();
 
             if (partialMatches.Count == 1)
             {
-                _logger.LogInformation("MyEpisodes: Found online partial match for '{ShowName}' -> '{MatchedName}' (ID: {Id})", showName, partialMatches[0].Name, partialMatches[0].Id);
-                await AddShowAsync(partialMatches[0].Id).ConfigureAwait(false);
-                return partialMatches[0].Id;
+                _logger.LogInformation("MyEpisodes: Found online partial match for '{ShowName}' -> '{MatchedName}' (ID: {Id})", showName, partialMatches[0].ShowName, partialMatches[0].ShowId);
+                await AddShowAsync(partialMatches[0].ShowId).ConfigureAwait(false);
+                return partialMatches[0].ShowId;
             }
             else if (partialMatches.Count > 1)
             {
-                _logger.LogInformation("MyEpisodes: Multiple partial matches online. Picking first: '{MatchedName}' (ID: {Id})", partialMatches[0].Name, partialMatches[0].Id);
-                await AddShowAsync(partialMatches[0].Id).ConfigureAwait(false);
-                return partialMatches[0].Id;
+                _logger.LogInformation("MyEpisodes: Multiple partial matches online. Picking first: '{MatchedName}' (ID: {Id})", partialMatches[0].ShowName, partialMatches[0].ShowId);
+                await AddShowAsync(partialMatches[0].ShowId).ConfigureAwait(false);
+                return partialMatches[0].ShowId;
             }
 
             // Fallback: pick the first search match
-            _logger.LogInformation("MyEpisodes: No precise match online. Picking first result: '{MatchedName}' (ID: {Id})", searchMatches[0].Name, searchMatches[0].Id);
-            await AddShowAsync(searchMatches[0].Id).ConfigureAwait(false);
-            return searchMatches[0].Id;
+            _logger.LogInformation("MyEpisodes: No precise match online. Picking first result: '{MatchedName}' (ID: {Id})", searchMatches[0].ShowName, searchMatches[0].ShowId);
+            await AddShowAsync(searchMatches[0].ShowId).ConfigureAwait(false);
+            return searchMatches[0].ShowId;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "MyEpisodes: Error searching online for '{ShowName}'", showName);
+            _logger.LogError(ex, "MyEpisodes: Error searching online API for '{ShowName}'", showName);
             return null;
         }
     }
@@ -335,21 +284,10 @@ public class MyEpisodesClient : IDisposable
             }
         }
 
-        _logger.LogInformation("MyEpisodes: Adding show ID {ShowId} to {Username}'s account", showId, _username);
+        _logger.LogInformation("MyEpisodes: Adding show ID {ShowId} to account via API", showId);
         try
         {
-            var content = new FormUrlEncodedContent(new Dictionary<string, string>
-            {
-                { "action", "add" },
-                { "showid", showId.ToString() }
-            });
-
-            var request = new HttpRequestMessage(HttpMethod.Post, "/ajax/service.php?mode=show_manage")
-            {
-                Content = content
-            };
-
-            var response = await _httpClient.SendAsync(request).ConfigureAwait(false);
+            var response = await SendWithRetryAsync(() => new HttpRequestMessage(HttpMethod.Put, $"/v1/me/shows/{showId}")).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 
             // Refresh show cache list
@@ -357,67 +295,102 @@ public class MyEpisodesClient : IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "MyEpisodes: Error adding show ID {ShowId}", showId);
+            _logger.LogError(ex, "MyEpisodes: Error adding show ID {ShowId} via API", showId);
         }
     }
 
     public async Task<bool> UpdateEpisodeStatus(int showId, int seasonNumber, int episodeNumber, EpisodeStatus episodeStatus)
     {
-        if (!await EnsureLoggedInAsync().ConfigureAwait(false))
-        {
-            return false;
-        }
+        _logger.LogInformation("MyEpisodes: Setting status for Show ID {ShowId}, S{Season}E{Episode} to {Status}",
+            showId, seasonNumber, episodeNumber, episodeStatus);
 
-        _logger.LogInformation("MyEpisodes: Setting watched state for Show ID {ShowId}, S{Season}E{Episode} to {Status} for {Username}",
-            showId, seasonNumber, episodeNumber, episodeStatus, _username);
-
-        
-        var (action, statusUpdate) = episodeStatus switch
+        var payload = episodeStatus switch
         {
-            EpisodeStatus.Acquired => ("A", true),
-            EpisodeStatus.Watched => ("V", true),
-            EpisodeStatus.Unacquired => ("A", false),
-            EpisodeStatus.Unwatched => ("V", false),
+            EpisodeStatus.Watched => (object)new { watched = true },
+            EpisodeStatus.Unwatched => new { watched = false },
+            EpisodeStatus.Acquired => new { acquired = true },
+            EpisodeStatus.Unacquired => new { acquired = false },
             _ => throw new ArgumentOutOfRangeException(nameof(episodeStatus), episodeStatus, null)
         };
-        
+
         try
         {
-            // Key format: [V/A][show_id]-[season]-[episode]
-            var key = $"{action}{showId}-{seasonNumber}-{episodeNumber}";
-            var content = new FormUrlEncodedContent(new Dictionary<string, string>
+            var response = await SendWithRetryAsync(() => new HttpRequestMessage(HttpMethod.Put, $"/v1/me/episodes/{showId}/{seasonNumber}/{episodeNumber}")
             {
-                { key, statusUpdate.ToString().ToLowerInvariant() }
-            });
+                Content = JsonContent.Create(payload)
+            }).ConfigureAwait(false);
 
-            var request = new HttpRequestMessage(HttpMethod.Post, "/ajax/service.php?mode=eps_update")
-            {
-                Content = content
-            };
-            // Mimic browser request headers
-            request.Headers.Accept.Clear();
-            request.Headers.Accept.ParseAdd("application/json, text/javascript, */*; q=0.01");
-            request.Headers.Referrer = new Uri($"https://www.myepisodes.com/show/id-{showId}/");
-            request.Headers.AcceptLanguage.Clear();
-            request.Headers.AcceptLanguage.ParseAdd("en-US,en-GB;q=0.9,en;q=0.8,hu-HU;q=0.7,hu;q=0.6");
-            request.Headers.Add("X-Requested-With", "XMLHttpRequest");
-            request.Headers.Add("Origin", "https://www.myepisodes.com");
-            request.Headers.Add("Cache-Control", "no-cache");
-            request.Headers.Pragma.ParseAdd("no-cache");
-            request.Headers.Add("Priority", "u=1, i");
-
-            var response = await _httpClient.SendAsync(request).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
-
             _logger.LogInformation("MyEpisodes: Successfully updated Show ID {ShowId}, S{Season}E{Episode} to {Status}",
                 showId, seasonNumber, episodeNumber, episodeStatus);
             return true;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "MyEpisodes: Error updating watched state for Show ID {ShowId}, S{Season}E{Episode}", showId, seasonNumber, episodeNumber);
+            _logger.LogError(ex, "MyEpisodes: Error updating episode status for Show ID {ShowId}, S{Season}E{Episode}", showId, seasonNumber, episodeNumber);
             return false;
         }
+    }
+
+    public async Task<bool> UpdateEpisodesBulkAsync(List<EpisodeUpdateItemDto> episodes)
+    {
+        if (episodes == null || episodes.Count == 0)
+        {
+            return true;
+        }
+
+        _logger.LogInformation("MyEpisodes: Bulk updating {Count} episodes via API", episodes.Count);
+
+        try
+        {
+            // Chunk episodes into batches of 500 max as allowed by MyEpisodes API
+            const int chunkSize = 500;
+            var allSuccess = true;
+
+            for (var i = 0; i < episodes.Count; i += chunkSize)
+            {
+                var chunk = episodes.Skip(i).Take(chunkSize).ToList();
+                var payload = new BulkEpisodeRequestDto { Episodes = chunk };
+
+                var response = await SendWithRetryAsync(() => new HttpRequestMessage(HttpMethod.Post, "/v1/me/episodes")
+                {
+                    Content = JsonContent.Create(payload)
+                }).ConfigureAwait(false);
+
+                response.EnsureSuccessStatusCode();
+                _logger.LogInformation("MyEpisodes: Successfully sent bulk update chunk of {Count} episodes", chunk.Count);
+            }
+
+            return allSuccess;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "MyEpisodes: Error sending bulk episode update via API");
+            return false;
+        }
+    }
+
+    private async Task<HttpResponseMessage> SendWithRetryAsync(Func<HttpRequestMessage> requestFactory, int maxRetries = 3)
+    {
+        for (var attempt = 0; attempt <= maxRetries; attempt++)
+        {
+            var request = requestFactory();
+            var response = await _httpClient.SendAsync(request).ConfigureAwait(false);
+
+            if (response.StatusCode == HttpStatusCode.TooManyRequests && attempt < maxRetries)
+            {
+                var retryAfter = response.Headers.RetryAfter;
+                var delay = retryAfter?.Delta ?? TimeSpan.FromSeconds(1);
+                _logger.LogWarning("MyEpisodes API Rate limited (429). Retrying after {Seconds} seconds (Attempt {Attempt}/{Max})",
+                    delay.TotalSeconds, attempt + 1, maxRetries);
+                await Task.Delay(delay).ConfigureAwait(false);
+                continue;
+            }
+
+            return response;
+        }
+
+        return await _httpClient.SendAsync(requestFactory()).ConfigureAwait(false);
     }
 
     private string NormalizeShowName(string name)
@@ -448,7 +421,10 @@ public class MyEpisodesClient : IDisposable
     {
         if (!_isDisposed)
         {
-            _httpClient.Dispose();
+            if (disposing)
+            {
+                _httpClient.Dispose();
+            }
             _isDisposed = true;
         }
     }

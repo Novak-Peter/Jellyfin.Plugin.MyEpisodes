@@ -12,45 +12,45 @@ public class MyEpisodesClientCacheTests
     [Fact]
     public async Task FindShowIdAsync_PopulatesCacheWhenEmpty_AndUsesCache()
     {
-        var myShowsHtml = """
-            <html>
-                <body>
-                    <a href="/epsbyshow/200/Doctor Who">Doctor Who</a>
-                </body>
-            </html>
+        var myShowsJson = """
+            {
+                "data": [
+                    { "showid": 200, "showname": "Doctor Who" }
+                ]
+            }
         """;
         var builder = new MyEpisodesClientTestBuilder()
-            .WithMyShowsListResponse(myShowsHtml);
+            .WithMyShowsListResponse(myShowsJson);
         var (client, handlerMock) = builder.Build();
 
         var showId = await client.FindOrAddShowAsync("Doctor Who", null);
         Assert.Equal(200, showId);
-        // Verify that a GET to /myshows/list/ was made
+        // Verify that a GET to /v1/me/shows was made
         handlerMock.Protected().Verify(
             "SendAsync",
             Times.Once(),
-            ItExpr.Is<HttpRequestMessage>(req => req.Method == HttpMethod.Get && req.RequestUri.PathAndQuery.Contains("/myshows/list/")),
+            ItExpr.Is<HttpRequestMessage>(req => req.Method == HttpMethod.Get && req.RequestUri != null && req.RequestUri.PathAndQuery.Contains("/v1/me/shows")),
             ItExpr.IsAny<System.Threading.CancellationToken>());
-        // Verify that no /search/ request was issued because the show was found in cache
+        // Verify that no /v1/shows?search= request was issued because the show was found in cache
         handlerMock.Protected().Verify(
             "SendAsync",
             Times.Never(),
-            ItExpr.Is<HttpRequestMessage>(req => req.Method == HttpMethod.Post && req.RequestUri.PathAndQuery.Contains("/search/")),
+            ItExpr.Is<HttpRequestMessage>(req => req.Method == HttpMethod.Get && req.RequestUri != null && req.RequestUri.PathAndQuery.Contains("/v1/shows?search=")),
             ItExpr.IsAny<System.Threading.CancellationToken>());
     }
 
     [Fact]
     public async Task FindShowIdAsync_UsesCacheOnSubsequentCalls_WithoutAdditionalNetwork()
     {
-        var myShowsHtml = """
-            <html>
-                <body>
-                    <a href="/epsbyshow/200/Doctor Who">Doctor Who</a>
-                </body>
-            </html>
+        var myShowsJson = """
+            {
+                "data": [
+                    { "showid": 200, "showname": "Doctor Who" }
+                ]
+            }
         """;
         var builder = new MyEpisodesClientTestBuilder()
-            .WithMyShowsListResponse(myShowsHtml);
+            .WithMyShowsListResponse(myShowsJson);
         var (client, handlerMock) = builder.Build();
 
         // First call populates cache

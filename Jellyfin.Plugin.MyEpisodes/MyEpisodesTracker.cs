@@ -78,7 +78,7 @@ public class MyEpisodesTracker : IHostedService, IDisposable
             string.Equals(u.JellyfinUserId, userIdStr, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(u.JellyfinUserId, e.UserId.ToString(), StringComparison.OrdinalIgnoreCase));
 
-        if (userConfig is not { SyncWatched: true } || string.IsNullOrEmpty(userConfig.Username) || string.IsNullOrEmpty(userConfig.Password))
+        if (userConfig is not { SyncWatched: true } || string.IsNullOrEmpty(userConfig.ApiKey))
         {
             TrackingCompleted?.Invoke(this, new TrackingCompletedEventArgs { IsSuccess = false });
             return;
@@ -99,8 +99,8 @@ public class MyEpisodesTracker : IHostedService, IDisposable
 
         var status = e.UserData.Played ? EpisodeStatus.Watched : EpisodeStatus.Unwatched;
 
-        _logger.LogInformation("MyEpisodes: Queueing watched state sync for user {Username}. '{SeriesName}' S{Season}E{Episode} -> Status: {Status}",
-            userConfig.Username, seriesName, seasonNumber.Value, episodeNumber.Value, status);
+        _logger.LogInformation("MyEpisodes: Queueing watched state sync for user {UserId}. '{SeriesName}' S{Season}E{Episode} -> Status: {Status}",
+            userConfig.JellyfinUserId, seriesName, seasonNumber.Value, episodeNumber.Value, status);
 
         _ = Task.Run(async () =>
         {
@@ -146,7 +146,7 @@ public class MyEpisodesTracker : IHostedService, IDisposable
             TrackingCompleted?.Invoke(this, new TrackingCompletedEventArgs { IsSuccess = false });
             return;
         }
-        
+
         var seriesName = episode.SeriesName;
         var seasonNumber = episode.ParentIndexNumber;
         var episodeNumber = episode.IndexNumber;
@@ -166,12 +166,11 @@ public class MyEpisodesTracker : IHostedService, IDisposable
             TrackingCompleted?.Invoke(this, new TrackingCompletedEventArgs { IsSuccess = false });
             return;
         }
-        
-        var userConfigs = config.UserConfigurations.Where(userConfig => 
+
+        var userConfigs = config.UserConfigurations.Where(userConfig =>
             userConfig is { SyncAcquired: true }
             && !string.IsNullOrWhiteSpace(userConfig.JellyfinUserId)
-            && !string.IsNullOrEmpty(userConfig.Username)
-            && !string.IsNullOrEmpty(userConfig.Password)).ToList();
+            && !string.IsNullOrEmpty(userConfig.ApiKey)).ToList();
 
         if (userConfigs.Count == 0)
         {
@@ -181,7 +180,6 @@ public class MyEpisodesTracker : IHostedService, IDisposable
             return;
         }
 
-            
         _ = Task.Run(async () =>
         {
             var aggregatedExceptions = new List<Exception>(userConfigs.Count);
@@ -196,7 +194,7 @@ public class MyEpisodesTracker : IHostedService, IDisposable
                     if (showId == null)
                     {
                         _logger.LogWarning("MyEpisodes: Could not resolve MyEpisodes show ID for series '{SeriesName}'",
-                            seriesName); 
+                            seriesName);
                         aggregatedSuccess = false;
                         continue;
                     }
@@ -206,35 +204,34 @@ public class MyEpisodesTracker : IHostedService, IDisposable
                     if (success)
                     {
                         _logger.LogInformation(
-                            "MyEpisodes: Successfully synced Acquired status S{Season}E{Episode} of '{SeriesName}' to MyEpisodes.com  for User {Username}",
-                            seasonNumber.Value, episodeNumber.Value, seriesName, userConfig.Username);
+                            "MyEpisodes: Successfully synced Acquired status S{Season}E{Episode} of '{SeriesName}' to MyEpisodes.com for User {UserId}",
+                            seasonNumber.Value, episodeNumber.Value, seriesName, userConfig.JellyfinUserId);
                     }
                     else
                     {
                         _logger.LogWarning(
-                            "MyEpisodes: Failed to sync Acquired status S{Season}E{Episode} of '{SeriesName}' to MyEpisodes.com for User {Username}",
-                            seasonNumber.Value, episodeNumber.Value, seriesName,  userConfig.Username);
+                            "MyEpisodes: Failed to sync Acquired status S{Season}E{Episode} of '{SeriesName}' to MyEpisodes.com for User {UserId}",
+                            seasonNumber.Value, episodeNumber.Value, seriesName, userConfig.JellyfinUserId);
                     }
                     aggregatedSuccess &= success;
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex,
-                        "MyEpisodes: Exception error while syncing acquired status for episode S{Season}E{Episode} of '{SeriesName}' for User {Username}",
-                        seasonNumber.Value, episodeNumber.Value, seriesName, userConfig.Username);
+                        "MyEpisodes: Exception error while syncing acquired status for episode S{Season}E{Episode} of '{SeriesName}' for User {UserId}",
+                        seasonNumber.Value, episodeNumber.Value, seriesName, userConfig.JellyfinUserId);
                     aggregatedExceptions.Add(ex);
                     aggregatedSuccess = false;
                 }
             }
-            TrackingCompleted?.Invoke(this, new TrackingCompletedEventArgs 
-                { 
-                    IsSuccess = aggregatedSuccess,
-                    Exception = aggregatedExceptions.Count > 1 ? new AggregateException(aggregatedExceptions) : aggregatedExceptions.FirstOrDefault()
-                });
+            TrackingCompleted?.Invoke(this, new TrackingCompletedEventArgs
+            {
+                IsSuccess = aggregatedSuccess,
+                Exception = aggregatedExceptions.Count > 1 ? new AggregateException(aggregatedExceptions) : aggregatedExceptions.FirstOrDefault()
+            });
         });
     }
 
-    
     private MyEpisodesClient GetClientForUser(MyEpisodesUserConfiguration userConfig)
     {
         var cacheKey = userConfig.JellyfinUserId;
@@ -242,18 +239,17 @@ public class MyEpisodesTracker : IHostedService, IDisposable
         {
             if (_clients.TryGetValue(cacheKey, out var existingClient))
             {
-                if (existingClient.Username == userConfig.Username && existingClient.Password == userConfig.Password)
+                if (existingClient.ApiKey == userConfig.ApiKey)
                 {
                     return existingClient;
                 }
 
-                // Credentials changed, dispose old client
-                _logger.LogInformation("MyEpisodes: Credentials changed for Jellyfin user {UserId}. Recreating client.", cacheKey);
+                _logger.LogInformation("MyEpisodes: ApiKey changed for Jellyfin user {UserId}. Recreating client.", cacheKey);
                 existingClient.Dispose();
                 _clients.Remove(cacheKey);
             }
 
-            var newClient = _clientFactory.CreateClient(userConfig.Username, userConfig.Password);
+            var newClient = _clientFactory.CreateClient(userConfig.ApiKey);
             _clients[cacheKey] = newClient;
             return newClient;
         }
@@ -286,8 +282,8 @@ public class MyEpisodesTracker : IHostedService, IDisposable
     }
 }
 
-
-public class TrackingCompletedEventArgs : EventArgs {
+public class TrackingCompletedEventArgs : EventArgs
+{
     public bool IsSuccess { get; init; }
     public Exception? Exception { get; init; }
 }

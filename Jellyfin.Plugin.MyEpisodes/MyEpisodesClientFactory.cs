@@ -1,11 +1,11 @@
+using System.Net.Http.Headers;
 using Microsoft.Extensions.Logging;
-using System.Net;
 
 namespace Jellyfin.Plugin.MyEpisodes;
 
 public interface IMyEpisodesClientFactory
 {
-    MyEpisodesClient CreateClient(string username, string password);
+    MyEpisodesClient CreateClient(string apiKey);
 }
 
 public class MyEpisodesClientFactory : IMyEpisodesClientFactory
@@ -17,27 +17,18 @@ public class MyEpisodesClientFactory : IMyEpisodesClientFactory
         _loggerFactory = loggerFactory;
     }
 
-    public MyEpisodesClient CreateClient(string username, string password)
+    public MyEpisodesClient CreateClient(string apiKey)
     {
         var logger = _loggerFactory.CreateLogger<MyEpisodesClient>();
 
-        var handler = new HttpClientHandler
+        var httpClient = new HttpClient
         {
-            UseCookies = true,
-            CookieContainer = new CookieContainer(),
-            AllowAutoRedirect = true,
-            AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
+            BaseAddress = new Uri("https://api.myepisodes.com")
         };
 
-        var httpClient = new HttpClient(handler, disposeHandler: true)
-        {
-            BaseAddress = new Uri("https://www.myepisodes.com")
-        };
+        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+        httpClient.DefaultRequestHeaders.Accept.ParseAdd("application/json");
 
-        httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
-        httpClient.DefaultRequestHeaders.AcceptLanguage.ParseAdd("en-US,en;q=0.9");
-
-        return new MyEpisodesClient(username, password, httpClient, logger);
+        return new MyEpisodesClient(apiKey, httpClient, logger);
     }
 }

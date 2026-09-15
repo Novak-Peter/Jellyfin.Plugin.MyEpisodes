@@ -10,18 +10,26 @@ namespace Jellyfin.Plugin.MyEpisodes.Tests;
 public class MyEpisodesClientTests
 {
     [Fact]
-    public async Task EnsureLoggedInAsync_ReturnsTrue_WhenLoginSucceeds()
+    public async Task PopulateShowsAsync_SendsGetRequestToApi()
     {
         // Arrange
-        var (client, handlerMock) = new MyEpisodesClientTestBuilder().Build();
+        var jsonResponse = """
+            {
+                "data": [
+                    { "showid": 100, "showname": "Doctor Who" }
+                ]
+            }
+            """;
+        var (client, handlerMock) = new MyEpisodesClientTestBuilder()
+            .WithMyShowsListResponse(jsonResponse)
+            .Build();
 
         // Act
-        var result = await client.EnsureLoggedInAsync();
+        await client.PopulateShowsAsync();
 
         // Assert
-        Assert.True(result);
         handlerMock.Protected().Verify("SendAsync", Times.Once(),
-            ItExpr.Is<HttpRequestMessage>(req => req.Method == HttpMethod.Post && req.RequestUri.PathAndQuery.Contains("/login/")),
+            ItExpr.Is<HttpRequestMessage>(req => req.Method == HttpMethod.Get && req.RequestUri != null && req.RequestUri.PathAndQuery.Contains("/v1/me/shows")),
             ItExpr.IsAny<System.Threading.CancellationToken>());
     }
 
@@ -29,17 +37,17 @@ public class MyEpisodesClientTests
     public async Task FindShowIdAsync_WithDuplicateShowsAndYear_ReturnsCorrectShowId()
     {
         // Arrange
-        var searchHtml = """
-                         <html>
-                             <body>
-                                 <a href="/epsbyshow/102/Doctor Who (2005)">Doctor Who (2005)</a>
-                                 <a href="/epsbyshow/103/Doctor Who (1963)">Doctor Who (1963)</a>
-                             </body>
-                         </html>
-                         """;
+        var searchJson = """
+            {
+                "data": [
+                    { "showid": 102, "showname": "Doctor Who (2005)" },
+                    { "showid": 103, "showname": "Doctor Who (1963)" }
+                ]
+            }
+            """;
 
         var (client, _) = new MyEpisodesClientTestBuilder()
-            .WithSearchResponse(searchHtml)
+            .WithSearchResponse(searchJson)
             .Build();
 
         // Act
@@ -53,17 +61,17 @@ public class MyEpisodesClientTests
     public async Task FindShowIdAsync_WithExactMatchOnly_ReturnsExactMatch()
     {
         // Arrange
-        var searchHtml = """
-                         <html>
-                             <body>
-                                 <a href="/epsbyshow/101/Doctor Who">Doctor Who</a>
-                                 <a href="/epsbyshow/102/Doctor Who (2005)">Doctor Who (2005)</a>
-                             </body>
-                         </html>
-                         """;
+        var searchJson = """
+            {
+                "data": [
+                    { "showid": 101, "showname": "Doctor Who" },
+                    { "showid": 102, "showname": "Doctor Who (2005)" }
+                ]
+            }
+            """;
 
         var (client, _) = new MyEpisodesClientTestBuilder()
-            .WithSearchResponse(searchHtml)
+            .WithSearchResponse(searchJson)
             .Build();
 
         // Act
@@ -77,18 +85,18 @@ public class MyEpisodesClientTests
     public async Task FindShowIdAsync_WithDuplicateBaseNamesAndYear2005_ReturnsYearMatch()
     {
         // Arrange
-        var searchHtml = """
-                         <html>
-                             <body>
-                                 <a href="/epsbyshow/103/Doctor Who (2005)">Doctor Who (2005)</a>
-                                 <a href="/epsbyshow/101/Doctor Who">Doctor Who</a>
-                                 <a href="/epsbyshow/102/Doctor Who">Doctor Who</a>
-                             </body>
-                         </html>
-                         """;
+        var searchJson = """
+            {
+                "data": [
+                    { "showid": 103, "showname": "Doctor Who (2005)" },
+                    { "showid": 101, "showname": "Doctor Who" },
+                    { "showid": 102, "showname": "Doctor Who" }
+                ]
+            }
+            """;
 
         var (client, _) = new MyEpisodesClientTestBuilder()
-            .WithSearchResponse(searchHtml)
+            .WithSearchResponse(searchJson)
             .Build();
 
         // Act
@@ -102,18 +110,18 @@ public class MyEpisodesClientTests
     public async Task FindShowIdAsync_WithDuplicateBaseNamesAndYear1963_ReturnsFirstBaseNameFallback()
     {
         // Arrange
-        var searchHtml = """
-                         <html>
-                             <body>
-                                 <a href="/epsbyshow/103/Doctor Who (2005)">Doctor Who (2005)</a>
-                                 <a href="/epsbyshow/101/Doctor Who">Doctor Who</a>
-                                 <a href="/epsbyshow/102/Doctor Who">Doctor Who</a>
-                             </body>
-                         </html>
-                         """;
+        var searchJson = """
+            {
+                "data": [
+                    { "showid": 103, "showname": "Doctor Who (2005)" },
+                    { "showid": 101, "showname": "Doctor Who" },
+                    { "showid": 102, "showname": "Doctor Who" }
+                ]
+            }
+            """;
 
         var (client, _) = new MyEpisodesClientTestBuilder()
-            .WithSearchResponse(searchHtml)
+            .WithSearchResponse(searchJson)
             .Build();
 
         // Act

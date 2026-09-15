@@ -9,15 +9,9 @@
                 </div>
 
                 <div class="inputContainer">
-                    <label for="txtUsername">MyEpisodes Username</label>
-                    <input type="text" id="txtUsername" name="txtUsername" is="emby-input" required />
-                    <div class="fieldDescription">Your MyEpisodes.com username.</div>
-                </div>
-
-                <div class="inputContainer">
-                    <label for="txtPassword">MyEpisodes Password</label>
-                    <input type="password" id="txtPassword" name="txtPassword" is="emby-input" required />
-                    <div class="fieldDescription">Your MyEpisodes.com password. Credentials are saved securely on the server.</div>
+                    <label for="txtApiKey">MyEpisodes API Key</label>
+                    <input type="password" id="txtApiKey" name="txtApiKey" is="emby-input" required />
+                    <div class="fieldDescription">Your MyEpisodes API key (requires <b>write</b> scope). Create one on your <a href="https://www.myepisodes.com/api-keys/" target="_blank" rel="noopener noreferrer">MyEpisodes API Keys page</a>.</div>
                 </div>
                 <div class="checkboxContainer checkboxContainer-withDescription">
                     <label>
@@ -53,13 +47,11 @@
                 });
 
                 if (userConfig) {
-                    document.querySelector('#txtUsername').value = userConfig.Username || '';
-                    document.querySelector('#txtPassword').value = userConfig.Password || '';
+                    document.querySelector('#txtApiKey').value = userConfig.ApiKey || '';
                     document.querySelector('#chkSyncWatched').checked = userConfig.SyncWatched !== false;
                     document.querySelector('#chkSyncAcquired').checked = userConfig.SyncAcquired !== false;
                 } else {
-                    document.querySelector('#txtUsername').value = '';
-                    document.querySelector('#txtPassword').value = '';
+                    document.querySelector('#txtApiKey').value = '';
                     document.querySelector('#chkSyncAcquired').checked = true;
                 }
             }
@@ -117,8 +109,7 @@
 
                     var userConfig = {
                         JellyfinUserId: selectedUserId,
-                        Username: document.querySelector('#txtUsername').value,
-                        Password: document.querySelector('#txtPassword').value,
+                        ApiKey: document.querySelector('#txtApiKey').value,
                         SyncWatched: document.querySelector('#chkSyncWatched').checked,
                         SyncAcquired: document.querySelector('#chkSyncAcquired').checked,
                     };

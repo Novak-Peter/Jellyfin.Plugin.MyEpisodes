@@ -10,32 +10,32 @@ namespace Jellyfin.Plugin.MyEpisodes.Tests.Utils;
 
 public class MyEpisodesClientTestBuilder
 {
-    private string _searchHtml = "<html></html>";
-    private string _loginHtml = "<html><body><a href=\"/logout/\"><strong>testuser</strong> (Logout)</a></body></html>";
-    private string _myShowsListHtml = "<html></html>";
-    private string _epsUpdateResponseContent = "ok";
+    private string _searchJsonResponse = """{"data": []}""";
+    private string _myShowsListJsonResponse = """{"data": []}""";
+    private string _episodeUpdateResponseContent = "{}";
+    private string _apiKey = "myeps_testkey123";
 
-    public MyEpisodesClientTestBuilder WithSearchResponse(string html)
+    public MyEpisodesClientTestBuilder WithApiKey(string apiKey)
     {
-        _searchHtml = html;
+        _apiKey = apiKey;
         return this;
     }
 
-    public MyEpisodesClientTestBuilder WithLoginResponse(string html)
+    public MyEpisodesClientTestBuilder WithSearchResponse(string json)
     {
-        _loginHtml = html;
+        _searchJsonResponse = json;
         return this;
     }
 
-    public MyEpisodesClientTestBuilder WithMyShowsListResponse(string html)
+    public MyEpisodesClientTestBuilder WithMyShowsListResponse(string json)
     {
-        _myShowsListHtml = html;
+        _myShowsListJsonResponse = json;
         return this;
     }
 
-    public MyEpisodesClientTestBuilder WithEpsUpdateResponse(string content)
+    public MyEpisodesClientTestBuilder WithEpisodeUpdateResponse(string content)
     {
-        _epsUpdateResponseContent = content;
+        _episodeUpdateResponseContent = content;
         return this;
     }
 
@@ -45,66 +45,74 @@ public class MyEpisodesClientTestBuilder
 
         handlerMock
             .Protected()
-            .Setup<Task<HttpResponseMessage>>("SendAsync",
-                ItExpr.Is<HttpRequestMessage>(req => req.Method == HttpMethod.Post && req.RequestUri.PathAndQuery.Contains("/login/")),
-                ItExpr.IsAny<System.Threading.CancellationToken>())
-            .ReturnsAsync(new HttpResponseMessage
-            {
-                StatusCode = HttpStatusCode.OK,
-                Content = new StringContent(_loginHtml)
-            });
+            .Setup("Dispose", ItExpr.IsAny<bool>());
 
+        // GET /v1/shows?search=...
         handlerMock
             .Protected()
             .Setup<Task<HttpResponseMessage>>("SendAsync",
-                ItExpr.Is<HttpRequestMessage>(req => req.Method == HttpMethod.Post && req.RequestUri.PathAndQuery.Contains("/search/")),
+                ItExpr.Is<HttpRequestMessage>(req => req.Method == HttpMethod.Get && req.RequestUri != null && req.RequestUri.PathAndQuery.Contains("/v1/shows")),
                 ItExpr.IsAny<System.Threading.CancellationToken>())
             .ReturnsAsync(new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.OK,
-                Content = new StringContent(_searchHtml)
+                Content = new StringContent(_searchJsonResponse, System.Text.Encoding.UTF8, "application/json")
             });
 
+        // PUT /v1/me/shows/{id}
         handlerMock
             .Protected()
             .Setup<Task<HttpResponseMessage>>("SendAsync",
-                ItExpr.Is<HttpRequestMessage>(req => req.Method == HttpMethod.Post && req.RequestUri.PathAndQuery.Contains("show_manage")),
+                ItExpr.Is<HttpRequestMessage>(req => req.Method == HttpMethod.Put && req.RequestUri != null && req.RequestUri.PathAndQuery.Contains("/v1/me/shows/")),
                 ItExpr.IsAny<System.Threading.CancellationToken>())
             .ReturnsAsync(new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.OK,
-                Content = new StringContent("ok")
+                Content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json")
             });
 
+        // GET /v1/me/shows
         handlerMock
             .Protected()
             .Setup<Task<HttpResponseMessage>>("SendAsync",
-                ItExpr.Is<HttpRequestMessage>(req => req.Method == HttpMethod.Get && req.RequestUri.PathAndQuery.Contains("/myshows/list/")),
+                ItExpr.Is<HttpRequestMessage>(req => req.Method == HttpMethod.Get && req.RequestUri != null && req.RequestUri.PathAndQuery.Contains("/v1/me/shows")),
                 ItExpr.IsAny<System.Threading.CancellationToken>())
             .ReturnsAsync(new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.OK,
-                Content = new StringContent(_myShowsListHtml)
+                Content = new StringContent(_myShowsListJsonResponse, System.Text.Encoding.UTF8, "application/json")
             });
 
-        // eps_update stub
+        // PUT /v1/me/episodes/{showid}/{season}/{episode}
         handlerMock
             .Protected()
             .Setup<Task<HttpResponseMessage>>("SendAsync",
-                ItExpr.Is<HttpRequestMessage>(req => req.Method == HttpMethod.Post && req.RequestUri.PathAndQuery.Contains("/eps_update")),
+                ItExpr.Is<HttpRequestMessage>(req => req.Method == HttpMethod.Put && req.RequestUri != null && req.RequestUri.PathAndQuery.Contains("/v1/me/episodes/")),
                 ItExpr.IsAny<System.Threading.CancellationToken>())
             .ReturnsAsync(new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.OK,
-                Content = new StringContent(_epsUpdateResponseContent)
+                Content = new StringContent(_episodeUpdateResponseContent, System.Text.Encoding.UTF8, "application/json")
+            });
+
+        // POST /v1/me/episodes (Bulk)
+        handlerMock
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>("SendAsync",
+                ItExpr.Is<HttpRequestMessage>(req => req.Method == HttpMethod.Post && req.RequestUri != null && req.RequestUri.PathAndQuery.Equals("/v1/me/episodes", StringComparison.OrdinalIgnoreCase)),
+                ItExpr.IsAny<System.Threading.CancellationToken>())
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = HttpStatusCode.OK,
+                Content = new StringContent(_episodeUpdateResponseContent, System.Text.Encoding.UTF8, "application/json")
             });
 
         var httpClient = new HttpClient(handlerMock.Object)
         {
-            BaseAddress = new Uri("https://www.myepisodes.com")
+            BaseAddress = new Uri("https://api.myepisodes.com")
         };
         var loggerMock = new Mock<ILogger>();
-        var client = new MyEpisodesClient("testuser", "testpass", httpClient, loggerMock.Object);
+        var client = new MyEpisodesClient(_apiKey, httpClient, loggerMock.Object);
 
         return (client, handlerMock);
     }

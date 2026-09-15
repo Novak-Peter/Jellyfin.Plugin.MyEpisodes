@@ -15,8 +15,8 @@ public class MyEpisodesClientDisposeTests
     {
         var (_, _) = new MyEpisodesClientTestBuilder().Build();
         var trackingHandler = new TrackingHandler();
-        var httpClient = new HttpClient(trackingHandler) { BaseAddress = new Uri("https://www.myepisodes.com") };
-        var clientWithTracking = new MyEpisodesClient("testuser", "testpass", httpClient, Mock.Of<Microsoft.Extensions.Logging.ILogger>());
+        var httpClient = new HttpClient(trackingHandler) { BaseAddress = new Uri("https://api.myepisodes.com") };
+        var clientWithTracking = new MyEpisodesClient("myeps_testkey", httpClient, Mock.Of<Microsoft.Extensions.Logging.ILogger>());
         clientWithTracking.Dispose();
         Assert.True(trackingHandler.IsDisposed);
     }
@@ -26,8 +26,8 @@ public class MyEpisodesClientDisposeTests
     {
         var (_, _) = new MyEpisodesClientTestBuilder().Build();
         var trackingHandler = new TrackingHandler();
-        var httpClient = new HttpClient(trackingHandler) { BaseAddress = new Uri("https://www.myepisodes.com") };
-        var clientWithTracking = new MyEpisodesClient("testuser", "testpass", httpClient, Mock.Of<Microsoft.Extensions.Logging.ILogger>());
+        var httpClient = new HttpClient(trackingHandler) { BaseAddress = new Uri("https://api.myepisodes.com") };
+        var clientWithTracking = new MyEpisodesClient("myeps_testkey", httpClient, Mock.Of<Microsoft.Extensions.Logging.ILogger>());
         clientWithTracking.Dispose();
         // second dispose should not throw
         var ex = Record.Exception(() => clientWithTracking.Dispose());
