@@ -140,6 +140,129 @@ public class MyEpisodesTrackerTests : IDisposable
     }
 
     [Fact]
+    public async Task OnUserDataSaved_ShowNotFound_ReturnsIsSuccessFalse_MED_69()
+    {
+        // Arrange
+        var userGuid = Guid.NewGuid();
+        var userConfig = new MyEpisodesUserConfiguration
+        {
+            JellyfinUserId = userGuid.ToString("N"),
+            ApiKey = "key1",
+            SyncWatched = true
+        };
+        _pluginConfig.UserConfigurations.Add(userConfig);
+
+        var (client, _) = new MyEpisodesClientTestBuilder()
+            .WithApiKey("key1")
+            .WithSearchResponse("""{"data": []}""")
+            .Build();
+
+        _clientFactoryMock.Setup(f => f.CreateClient("key1")).Returns(client);
+
+        var tracker = new MyEpisodesTracker(
+            _userDataManagerMock.Object,
+            _libraryManagerMock.Object,
+            _trackerLoggerMock.Object,
+            _clientFactoryMock.Object);
+
+        await tracker.StartAsync(CancellationToken.None);
+
+        var episode = new Episode
+        {
+            SeriesName = "UnknownShow999",
+            ParentIndexNumber = 1,
+            IndexNumber = 1
+        };
+
+        var eventArgs = new UserDataSaveEventArgs
+        {
+            Item = episode,
+            SaveReason = UserDataSaveReason.PlaybackFinished,
+            UserId = userGuid,
+            UserData = new UserItemData { Key = "", Played = true }
+        };
+
+        var trackingCompletedTcs = new TaskCompletionSource<TrackingCompletedEventArgs>();
+        tracker.TrackingCompleted += (sender, args) => trackingCompletedTcs.TrySetResult(args);
+
+        // Act
+        _userDataManagerMock.Raise(m => m.UserDataSaved += null, null, eventArgs);
+
+        var result = await trackingCompletedTcs.Task;
+
+        // Assert
+        Assert.False(result.IsSuccess);
+
+        await tracker.StopAsync(CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task OnUserDataSaved_UpdateStatusFails_ReturnsIsSuccessFalse_MED_71()
+    {
+        // Arrange
+        var userGuid = Guid.NewGuid();
+        var userConfig = new MyEpisodesUserConfiguration
+        {
+            JellyfinUserId = userGuid.ToString("N"),
+            ApiKey = "key1",
+            SyncWatched = true
+        };
+        _pluginConfig.UserConfigurations.Add(userConfig);
+
+        var jsonResponse = """{"data": [{"showid": 123, "showname": "Doctor Who"}]}""";
+
+        var (client, handlerMock) = new MyEpisodesClientTestBuilder()
+            .WithApiKey("key1")
+            .WithMyShowsListResponse(jsonResponse)
+            .Build();
+
+        // Setup update failure
+        handlerMock.Protected()
+            .Setup<Task<HttpResponseMessage>>("SendAsync",
+                ItExpr.Is<HttpRequestMessage>(req => req.Method == HttpMethod.Put && req.RequestUri != null && req.RequestUri.PathAndQuery.Contains("/v1/me/episodes/")),
+                ItExpr.IsAny<System.Threading.CancellationToken>())
+            .ReturnsAsync(new HttpResponseMessage { StatusCode = System.Net.HttpStatusCode.InternalServerError });
+
+        _clientFactoryMock.Setup(f => f.CreateClient("key1")).Returns(client);
+
+        var tracker = new MyEpisodesTracker(
+            _userDataManagerMock.Object,
+            _libraryManagerMock.Object,
+            _trackerLoggerMock.Object,
+            _clientFactoryMock.Object);
+
+        await tracker.StartAsync(CancellationToken.None);
+
+        var episode = new Episode
+        {
+            SeriesName = "Doctor Who",
+            ParentIndexNumber = 1,
+            IndexNumber = 1
+        };
+
+        var eventArgs = new UserDataSaveEventArgs
+        {
+            Item = episode,
+            SaveReason = UserDataSaveReason.PlaybackFinished,
+            UserId = userGuid,
+            UserData = new UserItemData { Key = "", Played = true }
+        };
+
+        var trackingCompletedTcs = new TaskCompletionSource<TrackingCompletedEventArgs>();
+        tracker.TrackingCompleted += (sender, args) => trackingCompletedTcs.TrySetResult(args);
+
+        // Act
+        _userDataManagerMock.Raise(m => m.UserDataSaved += null, null, eventArgs);
+
+        var result = await trackingCompletedTcs.Task;
+
+        // Assert
+        Assert.False(result.IsSuccess);
+
+        await tracker.StopAsync(CancellationToken.None);
+    }
+
+    [Fact]
     public async Task OnLibraryItemAdded_SyncsCorrectlyForEachUser_HIGH_236_239()
     {
         // Arrange

@@ -106,20 +106,20 @@ public class MyEpisodesClient : IDisposable
 
     public async Task<int?> FindOrAddShowAsync(string showName, int? productionYear = null)
     {
-        if (_shows.Count == 0)
-        {
-            await PopulateShowsAsync().ConfigureAwait(false);
-        }
-
         if (string.IsNullOrEmpty(showName))
         {
             return null;
         }
-        
+
         var normalizedName = NormalizeShowName(showName);
         if (string.IsNullOrEmpty(normalizedName))
         {
             return null;
+        }
+
+        if (_shows.Count == 0)
+        {
+            await PopulateShowsAsync().ConfigureAwait(false);
         }
 
         // 1. Try local cache
