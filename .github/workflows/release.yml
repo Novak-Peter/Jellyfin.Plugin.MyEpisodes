@@ -1,0 +1,83 @@
+name: Build & Release Plugin
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore & Publish
+        run: |
+          dotnet restore
+          dotnet publish Jellyfin.Plugin.MyEpisodes/Jellyfin.Plugin.MyEpisodes.csproj -c Release -f net9.0 -o ./publish
+
+      - name: Package Zip & Calculate Checksum
+        run: |
+          mkdir -p ./publish/MyEpisodes
+          cp ./publish/*.dll ./publish/*.deps.json ./publish/*.runtimeconfig.json ./publish/MyEpisodes/
+          cp manifest.json ./publish/MyEpisodes/
+          cd ./publish
+          zip -r MyEpisodes.zip MyEpisodes
+          CHECKSUM=$(sha256sum MyEpisodes.zip | awk '{print $1}')
+          echo "ZIP_CHECKSUM=$CHECKSUM" >> $GITHUB_ENV
+
+      - name: Update manifest.json with release details
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          # Format version to 4 components if 3 components given (e.g., 1.0.0 -> 1.0.0.0)
+          if [[ $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            VERSION_QUAD="${VERSION}.0"
+          else
+            VERSION_QUAD="$VERSION"
+          fi
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          python3 -c "
+          import json, os
+
+          manifest_path = 'manifest.json'
+          with open(manifest_path, 'r') as f:
+              data = json.load(f)
+
+          release_url = f'https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/MyEpisodes.zip'
+          checksum = os.environ.get('ZIP_CHECKSUM', '')
+          version_quad = '$VERSION_QUAD'
+          timestamp = '$TIMESTAMP'
+
+          for plugin in data:
+              if plugin.get('guid') == '105f5b60-0777-4223-bf2c-4def48a573ba':
+                  version_entry = {
+                      'version': version_quad,
+                      'changelog': f'Release {os.environ.get(\"GITHUB_REF_NAME\")}',
+                      'targetAbi': '10.9.0.0',
+                      'sourceUrl': release_url,
+                      'checksum': checksum,
+                      'timestamp': timestamp
+                  }
+                  # Update or append version entry
+                  existing_versions = [v for v in plugin.get('versions', []) if v.get('version') != version_quad]
+                  plugin['versions'] = [version_entry] + existing_versions
+
+          with open(manifest_path, 'w') as f:
+              json.dump(data, f, indent=2)
+          "
+
+      - name: Create GitHub Release with zip asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./publish/MyEpisodes.zip
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

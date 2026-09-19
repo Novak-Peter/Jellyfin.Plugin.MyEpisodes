@@ -59,24 +59,31 @@ If the plugin does not appear, repeat steps 4‑5 and check the log for permis
 ## 🌐 GitHub‑hosted distribution (automatic install via Jellyfin UI)
 
 ### 1️⃣ Add a **manifest.json** to the repository root
-```jsonc
-// manifest.json
-{
-  "name": "MyEpisodes",
-  "guid": "ef8b2e7c-cb1a-4a5b-9f9c-123456789abc",
-  "description": "Sync watch‑progress with MyEpisodes.net",
-  "overview": "Provides automatic episode‑matching, position sync and localisation support for MyEpisodes.",
-  "owner": "Novak‑Peter",
-  "version": "1.0.0",
-  "targetAbi": "10.9.0",
-  "category": "Synchronization",
-  "url": "https://github.com/Novak-Peter/Jellyfin.Plugin.MyEpisodes",
-  "sourceUrl": "https://github.com/Novak-Peter/Jellyfin.Plugin.MyEpisodes",
-  "imageUrl": "https://raw.githubusercontent.com/Novak-Peter/Jellyfin.Plugin.MyEpisodes/main/docs/icon.png",
-  "changelog": "https://github.com/Novak-Peter/Jellyfin.Plugin.MyEpisodes/blob/main/CHANGELOG.md"
-}
+```json
+[
+  {
+    "guid": "105f5b60-0777-4223-bf2c-4def48a573ba",
+    "name": "MyEpisodes",
+    "description": "Sync watch-progress with MyEpisodes.net",
+    "overview": "Provides automatic episode-matching, position sync and localisation support for MyEpisodes.",
+    "owner": "Novak-Peter",
+    "category": "Synchronization",
+    "imageUrl": "https://raw.githubusercontent.com/Novak-Peter/Jellyfin.Plugin.MyEpisodes/main/docs/icon.png",
+    "versions": [
+      {
+        "version": "1.0.0.0",
+        "changelog": "Initial release",
+        "targetAbi": "10.9.0.0",
+        "sourceUrl": "https://github.com/Novak-Peter/Jellyfin.Plugin.MyEpisodes/releases/download/v1.0.0/MyEpisodes.zip",
+        "checksum": "<sha256-hash>",
+        "timestamp": "2026-09-19T00:00:00Z"
+      }
+    ]
+  }
+]
 ```
-*The `guid` must be generated once (e.g., via https://www.guidgenerator.com) and never changed.*
+*The `guid` must be generated once and never changed across versions.*
+
 
 ### 2️⃣ Create a GitHub Actions workflow that builds & publishes a zip on every tag
 Create `.github/workflows/release.yml` with the following contents:
