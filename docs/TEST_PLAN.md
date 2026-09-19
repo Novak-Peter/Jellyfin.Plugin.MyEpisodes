@@ -222,6 +222,48 @@ The current `MyEpisodesClientTestBuilder` blocks several tests. Fix before writi
 - [LOW] 80 Concurrent syncs with empty _shows → idempotency guard prevents a data-wiping double-add
   of an already-tracked show.
 
+13. MyEpisodesClient — UpdateEpisodeStatus (replaces SetEpisodeWatchedStateAsync)
+- [HIGH] Acquired   → POSTs key `A{showId}-{season}-{episode}=true`.
+- [HIGH] Unacquired → POSTs key `A{showId}-{season}-{episode}=false`.
+- [HIGH] Watched    → POSTs key `V{showId}-{season}-{episode}=true`.
+- [HIGH] Unwatched  → POSTs key `V{showId}-{season}-{episode}=false`.
+- [MED]  Correct headers (Accept, Referer=/show/id-{showId}/, X-Requested-With, Origin) for all statuses.
+- [MED]  Not logged in / login fails → returns false, no POST.
+- [MED]  Non-2xx → returns false. Exception during send → returns false.
+- [LOW]  Invalid/undefined enum value → throws ArgumentOutOfRangeException (guard the switch).
+
+14. MyEpisodesTracker — OnLibraryItemAdded (acquired sync, all users)
+- [HIGH] **Per-user client correctness (regression):** with ≥2 users having SyncAcquired=true,
+  each user's episode is synced using THAT user's client — assert `GetClientForUser` is called
+  once per distinct userConfig, NOT always the first. (Guards the `.First()` bug.)
+- [HIGH] Each qualifying user gets an `A{id}-{s}-{e}=true` (Acquired) eps_update against their own session.
+- [HIGH] Non-Episode item → no sync for any user (and decide: should it even fire TrackingCompleted?).
+- [HIGH] Missing metadata (null series/season/episode) → logs warning, no sync, IsSuccess=false.
+- [MED]  Null Plugin.Instance.Configuration → no sync.
+- [MED]  User filtering: only users with SyncAcquired=true AND non-empty JellyfinUserId/Username/Password
+  are included. Users missing any are excluded.
+- [MED]  Zero qualifying users → logs info, no Task spawned, IsSuccess=false.
+- [MED]  FindOrAddShowAsync returns null for a user → that user contributes success=false; other users
+  still processed (loop continues, no early return).
+- [MED]  Mixed outcomes: user A succeeds, user B fails → aggregatedSuccess=false.
+- [MED]  All users succeed → IsSuccess=true, Exception=null.
+- [MED]  One user throws → exception captured, other users still processed, IsSuccess=false,
+  Exception is that single exception (not AggregateException).
+- [MED]  Two+ users throw → Exception is an AggregateException wrapping all.
+- [LOW]  SyncAcquired=false but SyncWatched=true users are NOT included in acquired sync.
+- [LOW]  Show resolution is attempted per user even for the same series (documents the no-dedup behavior;
+  if a per-series cache/throttle is added later, update this).
+- [LOW]  Library-scan volume: N episodes of one series added → assert no crash and each fires;
+  document that resolution currently repeats per episode.
+
+15. Configuration — SyncAcquired flag
+- [MED] MyEpisodesUserConfiguration.SyncAcquired default value is correct (assert default false unless intended).
+- [LOW] SyncAcquired and SyncWatched are independent (one on, other off → only that path acts).
+
+16. Regression guard — Watched path unaffected
+- [MED] OnUserDataSaved still uses per-user client (GetClientForUser(userConfig)) and Watched/Unwatched
+  mapping — re-run section 4/9 cases against the new UpdateEpisodeStatus signature.
+
   ---
 Implementation notes for the agent
 
