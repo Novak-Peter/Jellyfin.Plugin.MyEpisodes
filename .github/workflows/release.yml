@@ -26,7 +26,8 @@ jobs:
       - name: Package Zip & Calculate Checksum
         run: |
           mkdir -p ./publish/MyEpisodes
-          cp ./publish/*.dll ./publish/*.deps.json ./publish/*.runtimeconfig.json ./publish/MyEpisodes/
+          cp ./publish/*.dll ./publish/*.deps.json ./publish/MyEpisodes/
+          [ -f ./publish/*.runtimeconfig.json ] && cp ./publish/*.runtimeconfig.json ./publish/MyEpisodes/ || true
           cp manifest.json ./publish/MyEpisodes/
           cd ./publish
           zip -r MyEpisodes.zip MyEpisodes

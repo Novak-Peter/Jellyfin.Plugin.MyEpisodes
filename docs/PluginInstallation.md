@@ -114,7 +114,8 @@ jobs:
       - name: Prepare zip layout
         run: |
           mkdir -p ./publish/MyEpisodes
-          cp ./publish/*.dll ./publish/*.deps.json ./publish/*.runtimeconfig.json ./publish/MyEpisodes/
+          cp ./publish/*.dll ./publish/*.deps.json ./publish/MyEpisodes/
+          [ -f ./publish/*.runtimeconfig.json ] && cp ./publish/*.runtimeconfig.json ./publish/MyEpisodes/ || true
           cp manifest.json ./publish/MyEpisodes/
           cd ./publish && zip -r MyEpisodes.zip MyEpisodes
 
@@ -133,11 +134,27 @@ This workflow:
 4. Attaches the zip to a GitHub **Release**.
 
 ### 3️⃣ Tag & push a new version
+
+To publish a new version:
 ```bash
 git tag v1.0.0   # bump as appropriate
 git push origin v1.0.0
 ```
 GitHub Actions will run and a new Release will appear with the zip asset.
+
+#### 🔄 Re-tagging an existing release (if a workflow step failed)
+If a release build fails and you need to force re-trigger the workflow for an existing tag:
+```bash
+# Delete local tag
+git tag -d v1.0.0
+
+# Delete remote tag on GitHub
+git push origin :refs/tags/v1.0.0
+
+# Re-create and push tag
+git tag v1.0.0
+git push origin v1.0.0
+```
 
 ### 4️⃣ Host the manifest for Jellyfin to discover
 The raw file URL works out‑of‑the‑box:
@@ -180,6 +197,10 @@ ha addons restart core_jellyfin   # or restart via UI
 # 3. Tag a new version
 git tag v1.0.0
 git push origin v1.0.0   # triggers CI and creates a Release with MyEpisodes.zip
+
+# Re-tagging an existing release:
+# git tag -d v1.0.0 && git push origin :refs/tags/v1.0.0 && git tag v1.0.0 && git push origin v1.0.0
+
 # 4. In Jellyfin UI → Dashboard → Plugins → Repositories, add:
 #    https://raw.githubusercontent.com/Novak-Peter/Jellyfin.Plugin.MyEpisodes/main/manifest.json
 ```
