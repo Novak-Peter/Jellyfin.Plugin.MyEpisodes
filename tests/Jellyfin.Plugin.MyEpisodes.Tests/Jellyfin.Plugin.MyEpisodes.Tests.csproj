@@ -4,6 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
     <AssemblyName>Jellyfin.Plugin.MyEpisodes.Tests</AssemblyName>
+    <EnableTestingPlatform>true</EnableTestingPlatform>
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
   </PropertyGroup>
 
   <ItemGroup>
