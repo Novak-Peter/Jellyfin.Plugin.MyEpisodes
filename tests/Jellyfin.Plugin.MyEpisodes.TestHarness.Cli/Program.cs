@@ -20,18 +20,20 @@ class Program
 {
     static async Task<int> Main(string[] args)
     {
-        var configOption = new Option<string>("--config", "Configuration") { IsRequired = true };
+        var configOption = new Option<string>("--config", "Configuration") { Required = true };
         var rootCommand = new RootCommand("MyEpisodes test harness CLI") { configOption };
 
-        rootCommand.SetHandler(async (configJson) =>
+        rootCommand.SetAction(async (parseResult) =>
         {
+            var configJson = parseResult.GetValue(configOption)!;                                                    
             var trackingSignal = new TaskCompletionSource<TrackingCompletedEventArgs>();
             var pluginConfiguration = LoadPluginConfiguration(configJson);
 
+            
             var builder = Host.CreateApplicationBuilder();
             builder.Services.AddSingleton<IServerApplicationHost, StubServerApplicationHost>();
             builder.Services.AddSingleton<IUserDataManager, StubUserDataManager>();
-            builder.Services.AddSingleton<ILibraryManager, StubLibraryManager>();
+            builder.Services.AddSingleton(Substitute.For<ILibraryManager>());
 
             var registrator = new PluginServiceRegistrator();
             var hostStub = builder.Services.BuildServiceProvider().GetRequiredService<IServerApplicationHost>();
@@ -47,9 +49,9 @@ class Program
 
             if (tracker != null)
             {
-                tracker.TrackingCompleted += (sender, args) =>
+                tracker.TrackingCompleted += (_, trackingArgs) =>
                 {
-                    trackingSignal.TrySetResult(args);
+                    trackingSignal.TrySetResult(trackingArgs);
                 };
             }
 
@@ -63,7 +65,7 @@ class Program
                     Id = targetUserGuid
                 };
                 var fakeItem = new Episode()
-                    { SeriesName = "Slow Horses", ParentIndexNumber = 5, IndexNumber = 1 };
+                    { SeriesName = "Slow Horses", ParentIndexNumber = 6, IndexNumber = 1 };
                 var fakeData = new UserItemData { Key = "", Played = true };
                 userDataManager.SaveUserData(user, fakeItem, fakeData, UserDataSaveReason.PlaybackFinished, CancellationToken.None);
                 await trackingSignal.Task.ConfigureAwait(false);
@@ -74,9 +76,9 @@ class Program
             }
             
             await host.StopAsync();
-        }, configOption);
+        });
 
-        return await rootCommand.InvokeAsync(args);
+        return await rootCommand.Parse(args).InvokeAsync();
     }
 
     static PluginConfiguration LoadPluginConfiguration(string configJson)

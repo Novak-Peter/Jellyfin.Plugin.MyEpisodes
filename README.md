@@ -8,16 +8,16 @@
 
 ---
 
-## ✨ Features
+## Features
 
-- 📺 **Automatic Watched Sync**: Automatically marks episodes as watched on MyEpisodes when completed in Jellyfin.
-- 📥 **Acquired Status Sync**: Updates episode status to acquired when new episodes are added to Jellyfin libraries.
-- 👥 **Multi-User Configuration**: Per-user mapping between Jellyfin users and their MyEpisodes API keys.
-- ⚙️ **Customizable Preferences**: Enable or disable Watched or Acquired synchronization toggles per user.
+- **Automatic Watched Sync**: Automatically marks episodes as watched on MyEpisodes when completed in Jellyfin.
+- **Acquired Status Sync**: Updates episode status to acquired when new episodes are added to Jellyfin libraries.
+- **Multi-User Configuration**: Per-user mapping between Jellyfin users and their MyEpisodes API keys.
+- **Customizable Preferences**: Enable or disable Watched or Acquired synchronization toggles per user.
 
 ---
 
-## 🚀 Installation
+## Installation
 
 ### Option 1: Jellyfin Plugin Repository (Recommended)
 
@@ -42,11 +42,11 @@
    - **Windows**: `%AppData%\jellyfin\plugins\MyEpisodes\`
 3. Restart your Jellyfin server.
 
-For detailed Home Assistant / Raspberry Pi setup steps, check out [PluginInstallation.md](file:///Users/peti/Developer/Repos/Jellyfin.Plugin.MyEpisodes/docs/PluginInstallation.md).
+For detailed Home Assistant / Raspberry Pi setup steps, check out [PluginInstallation.md](docs/PluginInstallation.md).
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
 1. In Jellyfin, navigate to **Dashboard** → **Plugins** → **MyEpisodes**.
 2. Select your Jellyfin user profile.
@@ -58,11 +58,11 @@ For detailed Home Assistant / Raspberry Pi setup steps, check out [PluginInstall
 
 ---
 
-## 🛠️ Development & Building
+## Development & Building
 
 ### Prerequisites
 
-- [.NET 9.0 SDK](https://dotnet.microsoft.com/download)
+- [.NET 10.0 SDK](https://dotnet.microsoft.com/download)
 
 ### Building Locally
 
@@ -75,18 +75,18 @@ cd Jellyfin.Plugin.MyEpisodes
 dotnet restore
 
 # Build release binary
-dotnet publish Jellyfin.Plugin.MyEpisodes/Jellyfin.Plugin.MyEpisodes.csproj -c Release -f net9.0 -o ./publish
+dotnet publish Jellyfin.Plugin.MyEpisodes/Jellyfin.Plugin.MyEpisodes.csproj -c Release -f net10.0 -o ./publish
 ```
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Contributions, issues, and feature requests are welcome!  
 Feel free to check the [issues page](https://github.com/Novak-Peter/Jellyfin.Plugin.MyEpisodes/issues).
 
 ---
 
-## 📜 License
+## License
 
 Distributed under the MIT License. See `LICENSE` for more information.

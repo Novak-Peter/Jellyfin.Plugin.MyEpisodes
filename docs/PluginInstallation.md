@@ -14,8 +14,8 @@ This document covers two scenarios:
 cd /Users/peti/Developer/Repos/Jellyfin.Plugin.MyEpisodes
 # Restore NuGet packages (once)
 dotnet restore
-# Publish a Release build for .NET 9 targeting the specific plugin project
-dotnet publish Jellyfin.Plugin.MyEpisodes/Jellyfin.Plugin.MyEpisodes.csproj -c Release -f net9.0 -o ./publish
+# Publish a Release build for .NET 10 targeting the specific plugin project
+dotnet publish Jellyfin.Plugin.MyEpisodes/Jellyfin.Plugin.MyEpisodes.csproj -c Release -f net10.0 -o ./publish
 ```
 The `./publish` folder now contains:
 ```
@@ -73,7 +73,7 @@ If the plugin does not appear, repeat steps 4‑5 and check the log for permis
       {
         "version": "1.0.0.0",
         "changelog": "Initial release",
-        "targetAbi": "10.9.0.0",
+        "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/Novak-Peter/Jellyfin.Plugin.MyEpisodes/releases/download/v1.0.0/MyEpisodes.zip",
         "checksum": "<sha256-hash>",
         "timestamp": "2026-09-19T00:00:00Z"
@@ -104,12 +104,12 @@ jobs:
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '9.0.x'
+          dotnet-version: '10.0.x'
 
       - name: Restore & Publish
         run: |
           dotnet restore
-          dotnet publish Jellyfin.Plugin.MyEpisodes/Jellyfin.Plugin.MyEpisodes.csproj -c Release -f net9.0 -o ./publish
+          dotnet publish Jellyfin.Plugin.MyEpisodes/Jellyfin.Plugin.MyEpisodes.csproj -c Release -f net10.0 -o ./publish
 
       - name: Prepare zip layout
         run: |
@@ -186,7 +186,7 @@ You can give this URL to other Jellyfin installations.
 ```bash
 # --- Direct install ---
 cd /Users/peti/Developer/Repos/Jellyfin.Plugin.MyEpisodes
-dotnet publish Jellyfin.Plugin.MyEpisodes/Jellyfin.Plugin.MyEpisodes.csproj -c Release -f net9.0 -o ./publish
+dotnet publish Jellyfin.Plugin.MyEpisodes/Jellyfin.Plugin.MyEpisodes.csproj -c Release -f net10.0 -o ./publish
 scp -r ./publish/* pi@raspberrypi.local:/share/jellyfin/plugins/MyEpisodes/
 ssh pi@raspberrypi.local "chown -R 1000:1000 /share/jellyfin/plugins/MyEpisodes && chmod -R 755 /share/jellyfin/plugins/MyEpisodes"
 ha addons restart core_jellyfin   # or restart via UI

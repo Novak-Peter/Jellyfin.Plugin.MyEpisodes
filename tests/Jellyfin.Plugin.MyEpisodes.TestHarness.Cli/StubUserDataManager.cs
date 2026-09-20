@@ -36,6 +36,21 @@ public class StubUserDataManager : IUserDataManager
         return null;
     }
 
+    public Dictionary<Guid, UserItemData> GetUserDataBatch(IReadOnlyList<BaseItem> items, User user)
+    {
+        return new Dictionary<Guid, UserItemData>();
+    }
+
+    public VersionResumeData? GetResumeUserData(User user, BaseItem item)
+    {
+        return null;
+    }
+
+    public IReadOnlyDictionary<Guid, VersionResumeData> GetResumeUserDataBatch(IReadOnlyList<BaseItem> items, User user)
+    {
+        return new Dictionary<Guid, VersionResumeData>();
+    }
+
     public UserItemDataDto? GetUserDataDto(BaseItem item, BaseItemDto? itemDto, User user, DtoOptions options)
     {
         return null;
@@ -44,6 +59,11 @@ public class StubUserDataManager : IUserDataManager
     public bool UpdatePlayState(BaseItem item, UserItemData data, long? reportedPositionTicks)
     {
         return false;
+    }
+
+    public void ResetPlaybackStreamSelections(User user, BaseItem item)
+    {
+        throw new NotImplementedException();
     }
 
     public event EventHandler<UserDataSaveEventArgs>? UserDataSaved;
