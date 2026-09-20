@@ -19,7 +19,7 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Run Tests
-        run: dotnet test tests/Jellyfin.Plugin.MyEpisodes.Tests/Jellyfin.Plugin.MyEpisodes.Tests.csproj
+        run: dotnet run --project tests/Jellyfin.Plugin.MyEpisodes.Tests/Jellyfin.Plugin.MyEpisodes.Tests.csproj
 
       - name: Restore & Publish
         run: |
