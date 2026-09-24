@@ -75,7 +75,7 @@ If the plugin does not appear, repeat steps 4‑5 and check the log for permis
         "changelog": "Initial release",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/Novak-Peter/Jellyfin.Plugin.MyEpisodes/releases/download/v1.0.0/MyEpisodes.zip",
-        "checksum": "<sha256-hash>",
+        "checksum": "<md5-hash>",
         "timestamp": "2026-09-19T00:00:00Z"
       }
     ]
