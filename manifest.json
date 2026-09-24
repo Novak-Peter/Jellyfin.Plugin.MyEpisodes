@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/Novak-Peter/Jellyfin.Plugin.MyEpisodes/main/docs/icon.png",
     "versions": [
       {
+        "version": "2.0.1.0",
+        "changelog": "Release v2.0.1",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/Novak-Peter/Jellyfin.Plugin.MyEpisodes/releases/download/v2.0.1/MyEpisodes.zip",
+        "checksum": "37c746921d31505eb1773a0989c21bed",
+        "timestamp": "2026-09-24T07:05:37Z"
+      },
+      {
         "version": "1.0.0.0",
         "changelog": "Initial release",
         "targetAbi": "12.0.0.0",
