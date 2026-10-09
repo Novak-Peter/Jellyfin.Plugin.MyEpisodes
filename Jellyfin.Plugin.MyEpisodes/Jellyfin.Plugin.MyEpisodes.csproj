@@ -5,8 +5,8 @@
         <Nullable>enable</Nullable>
     </PropertyGroup>
     <ItemGroup>
-        <PackageReference Include="Jellyfin.Controller" Version="12.1.0" ExcludeAssets="runtime" />
-        <PackageReference Include="Jellyfin.Model" Version="12.1.0" ExcludeAssets="runtime" />
+        <PackageReference Include="Jellyfin.Controller" Version="12.2.0" ExcludeAssets="runtime" />
+        <PackageReference Include="Jellyfin.Model" Version="12.2.0" ExcludeAssets="runtime" />
     </ItemGroup>
     <ItemGroup>
         <EmbeddedResource Include="Configuration/configPage.html" />
